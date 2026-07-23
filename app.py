@@ -1,3 +1,5 @@
+import os
+import re
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,19 +9,154 @@ from scipy.interpolate import PchipInterpolator
 # Gestione compatibilità NumPy per l'integrale
 trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
+# Configurazione pagina a larghezza intera
 st.set_page_config(
     page_title="Confronto Rigidezza & Isteresi Scarponi",
     page_icon="🎿",
     layout="wide"
 )
 
+# CSS Custom per allargare la sidebar e migliorare la visibilità del selettore
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] {
+        min-width: 350px;
+        max-width: 380px;
+    }
+    .stMultiSelect div[data-baseweb="select"] span {
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🎿 Confronto Meccanico Rigidezza e Isteresi")
-st.write("Carica uno o più file Excel per scansionare automaticamente i cicli e confrontare le prestazioni dei vari scarponi.")
 
 # PARAMETRI CALCOLO FISICO (uguali allo script MATLAB)
 PASSO_SECANTE_DEG = 0.25
 N_PUNTI_INTERP = 1000
 GRADO_TREND_RIGIDEZZA = 3
+
+# =========================================================================
+# PARSING INTESTAZIONI E CATALOGAZIONE (IDENTICO A MATLAB)
+# =========================================================================
+
+def estrai_info_header(header_str):
+    header_str = str(header_str)
+    
+    # 1. Identificazione Prova (es. paris_1, paris_2)
+    tok_paris = re.search(r'(paris_\d+)', header_str, re.IGNORECASE)
+    if tok_paris:
+        prova = tok_paris.group(1)
+    else:
+        tok_dash = re.search(r'-\s*([A-Za-z0-9_]+)', header_str)
+        if tok_dash and tok_dash.group(1).lower() not in ['altro', 'posizione', 'coppia']:
+            prova = tok_dash.group(1)
+        else:
+            parole = re.findall(r'[A-Za-z0-9_]+', header_str)
+            escludi = {'altro', 'posizione', 'coppia', 'n', 'm', 'deg', 'session', 'saves', 'cycle', 'unnamed'}
+            valide = [w for w in parole if w.lower() not in escludi]
+            prova = valide[0] if valide else 'Prova'
+            
+    # 2. Identificazione Sessione (es. Session 1 -> Sess.1)
+    tok_s = re.search(r'Session\s*(\d+)', header_str, re.IGNORECASE)
+    sess = f"Sess.{tok_s.group(1)}" if tok_s else ""
+    
+    # 3. Identificazione Ciclo (es. Cycle 1 -> Cycle1)
+    tok_c = re.search(r'(Cycle\s*\d+)', header_str, re.IGNORECASE)
+    ciclo = tok_c.group(1).replace(" ", "") if tok_c else ""
+    
+    dati_str = " ".join(filter(None, [prova, sess, ciclo])).strip()
+    return dati_str if dati_str else header_str
+
+def costruisci_catalogo(uploaded_files):
+    catalogo = []
+    pos_kw = ['posiz', 'theta', 'deg', 'angle', 'posizione', '°']
+    tor_kw = ['coppia', 'torque', 'tau', 'nm', 'nmm', 'cycle', 'altro']
+    
+    for file in uploaded_files:
+        file_no_ext = os.path.splitext(file.name)[0]
+        try:
+            xls = pd.ExcelFile(file)
+            for sheet_name in xls.sheet_names:
+                df = pd.read_excel(xls, sheet_name=sheet_name)
+                num_cols = len(df.columns)
+                if num_cols < 2:
+                    continue
+                
+                col_names = list(df.columns)
+                coppie_trovate = False
+                
+                # --- METODO 1: Riconoscimento Parole Chiave ---
+                c = 0
+                while c < num_cols:
+                    col_name = str(col_names[c])
+                    low_name = col_name.lower()
+                    
+                    is_pos = sum(1 for k in pos_kw if k in low_name) > sum(1 for k in tor_kw if k in low_name)
+                    if is_pos:
+                        c_cop = -1
+                        if c < num_cols - 1:
+                            low_next = str(col_names[c+1]).lower()
+                            if sum(1 for k in tor_kw if k in low_next) > 0:
+                                c_cop = c + 1
+                        if c_cop == -1 and c > 0:
+                            low_prev = str(col_names[c-1]).lower()
+                            if sum(1 for k in tor_kw if k in low_prev) > 0:
+                                c_cop = c - 1
+                                
+                        if c_cop != -1:
+                            pos_col_name = col_name
+                            cop_col_name = str(col_names[c_cop])
+                            
+                            dati_str = estrai_info_header(cop_col_name)
+                            label = f"[FILE: {file_no_ext}] [FOGLIO: {sheet_name}] --> {dati_str}"
+                            nome_breve = f"{dati_str} ({file_no_ext} - {sheet_name})"
+                            
+                            if not any(x['file_name'] == file.name and x['sheet'] == sheet_name and x['cop_col'] == cop_col_name for x in catalogo):
+                                catalogo.append({
+                                    'file_name': file.name,
+                                    'sheet': sheet_name,
+                                    'pos_col': pos_col_name,
+                                    'cop_col': cop_col_name,
+                                    'label': label,
+                                    'nome_breve': nome_breve,
+                                    'df': df
+                                })
+                                coppie_trovate = True
+                    c += 1
+                    
+                # --- METODO 2 (FALLBACK): Colonne numeriche adiacenti ---
+                if not coppie_trovate:
+                    c = 0
+                    while c < num_cols - 1:
+                        v1 = pd.to_numeric(df.iloc[:, c], errors='coerce').dropna().values
+                        v2 = pd.to_numeric(df.iloc[:, c+1], errors='coerce').dropna().values
+                        
+                        if len(v1) >= 5 and len(v2) >= 5:
+                            pos_col_name = str(col_names[c])
+                            cop_col_name = str(col_names[c+1])
+                            
+                            nome_prova = pos_col_name if not pos_col_name.startswith('Unnamed') else f"Prova_Col_{c+1}"
+                            label = f"[FILE: {file_no_ext}] [FOGLIO: {sheet_name}] --> {nome_prova}"
+                            nome_breve = f"{nome_prova} ({file_no_ext} - {sheet_name})"
+                            
+                            if not any(x['file_name'] == file.name and x['sheet'] == sheet_name and x['cop_col'] == cop_col_name for x in catalogo):
+                                catalogo.append({
+                                    'file_name': file.name,
+                                    'sheet': sheet_name,
+                                    'pos_col': pos_col_name,
+                                    'cop_col': cop_col_name,
+                                    'label': label,
+                                    'nome_breve': nome_breve,
+                                    'df': df
+                                })
+                            c += 2
+                        else:
+                            c += 1
+        except Exception as e:
+            st.warning(f"Errore nella lettura del file {file.name}: {e}")
+    return catalogo
 
 # =========================================================================
 # FUNZIONI DI CALCOLO FISICO
@@ -134,7 +271,7 @@ def fit_trend_polinomiale(x, y, grado=3):
         return np.zeros_like(x)
 
 # =========================================================================
-# SCANSIONE CATALOGO FILE EXCEL
+# FLUSSO DELL'INTERFACCIA UTENTE
 # =========================================================================
 
 st.sidebar.header("1. Caricamento File")
@@ -145,61 +282,41 @@ uploaded_files = st.sidebar.file_uploader(
 )
 
 if uploaded_files:
-    catalogo = []
-    pos_kw = ['posiz', 'theta', 'deg', 'angle', 'posizione', '°']
-    tor_kw = ['coppia', 'torque', 'tau', 'nm', 'nmm', 'cycle', 'altro']
+    catalogo = costruisci_catalogo(uploaded_files)
     
-    for file in uploaded_files:
-        try:
-            xls = pd.ExcelFile(file)
-            for sheet_name in xls.sheet_names:
-                df = pd.read_excel(xls, sheet_name=sheet_name)
-                cols = list(df.columns)
-                num_cols = len(cols)
-                if num_cols < 2:
-                    continue
-                
-                # Riconoscimento colonne
-                for c in range(num_cols):
-                    col_name = str(cols[c])
-                    low_name = col_name.lower()
-                    
-                    is_pos = sum(1 for k in pos_kw if k in low_name) > sum(1 for k in tor_kw if k in low_name)
-                    if is_pos:
-                        c_cop = -1
-                        if c < num_cols - 1 and any(k in str(cols[c+1]).lower() for k in tor_kw):
-                            c_cop = c + 1
-                        elif c > 0 and any(k in str(cols[c-1]).lower() for k in tor_kw):
-                            c_cop = c - 1
-                            
-                        if c_cop != -1:
-                            cop_col_name = str(cols[c_cop])
-                            label = f"[FILE: {file.name}] [FOGLIO: {sheet_name}] --> {cop_col_name}"
-                            nome_breve = f"{cop_col_name} ({file.name} - {sheet_name})"
-                            catalogo.append({
-                                'file': file,
-                                'sheet': sheet_name,
-                                'pos_col': col_name,
-                                'cop_col': cop_col_name,
-                                'label': label,
-                                'nome_breve': nome_breve,
-                                'df': df
-                            })
-        except Exception as e:
-            st.warning(f"Errore nella lettura del file {file.name}: {e}")
-
     if not catalogo:
         st.error("Nessuna colonna valida di Posizione/Coppia trovata nei file caricati.")
     else:
-        st.sidebar.header("2. Selezione Curve")
+        st.markdown("---")
+        st.subheader("📋 Selettore Dataset - File, Fogli e Cicli")
+        st.caption("Seleziona le curve da confrontare dal catalogo scansionato:")
+        
         etichette = [item['label'] for item in catalogo]
-        selezionate = st.sidebar.multiselect(
-            "Scegli le curve da confrontare:", 
-            options=etichette, 
-            default=etichette[:min(5, len(etichette))]
+        
+        # Gestione stato selezione
+        if 'selected_curves' not in st.session_state:
+            st.session_state.selected_curves = []
+            
+        col_b1, col_b2, _ = st.columns([1.5, 1.5, 7])
+        if col_b1.button("✅ Seleziona Tutti"):
+            st.session_state.selected_curves = etichette
+            st.rerun()
+        if col_b2.button("❌ Deseleziona Tutti"):
+            st.session_state.selected_curves = []
+            st.rerun()
+            
+        selezionate = st.multiselect(
+            "Curve disponibili:",
+            options=etichette,
+            default=st.session_state.selected_curves,
+            placeholder="Clicca qui per selezionare le curve da visualizzare..."
         )
-
-        if selezionate:
+        
+        st.session_state.selected_curves = selezionate
+        
+        if not selezionate:
+            st.info("👆 Seleziona almeno una curva dall'elenco qui sopra per visualizzare i grafici e la tabella dei dati.")
+        else:
             dati_elaborati = []
             
             for item in catalogo:
@@ -254,6 +371,7 @@ if uploaded_files:
                     })
 
             if dati_elaborati:
+                st.markdown("---")
                 # =========================================================
                 # GRAFICI (Griglia 2x2 come su MATLAB)
                 # =========================================================
@@ -262,21 +380,17 @@ if uploaded_files:
 
                 for i, d in enumerate(dati_elaborati):
                     c = colors[i]
-                    # Subplot 1: Andata++ (Flex di Spinta)
+                    # Subplot 1: Andata++
                     axs[0, 0].plot(d['pos_andPP'], d['cop_andPP'], color=c, label=f"{d['nome_breve']} ({d['lav_andPP']:.2f} J)")
-                    
-                    # Subplot 2: Ritorno++ (Rebound)
+                    # Subplot 2: Ritorno++
                     axs[0, 1].plot(d['pos_ritPP'], d['cop_ritPP'], color=c, label=f"{d['nome_breve']} ({d['lav_ritPP']:.2f} J)")
-                    
                     # Subplot 3: Rigidezza Andata++
                     axs[1, 0].plot(d['th_andPP'], d['rig_andPP'], '--', color=c, alpha=0.4)
                     axs[1, 0].plot(d['th_andPP'], d['trend_andPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
-                    
                     # Subplot 4: Rigidezza Ritorno++
                     axs[1, 1].plot(d['th_ritPP'], d['rig_ritPP'], '--', color=c, alpha=0.4)
                     axs[1, 1].plot(d['th_ritPP'], d['trend_ritPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
 
-                # Formattazione assi e griglie
                 titles = ['Andata++ (Flex di Spinta)', 'Ritorno++ (Rebound)', 'Rigidezza Andata++ (Flex)', 'Rigidezza Ritorno++ (Rebound)']
                 x_labels = ['Posizione [°]', 'Posizione [°]', 'Posizione [°]', 'Posizione [°]']
                 y_labels = ['Coppia [Nm]', 'Coppia [Nm]', 'Rigidezza [Nm/°]', 'Rigidezza [Nm/°]']
@@ -307,4 +421,4 @@ if uploaded_files:
                 st.dataframe(df_riepilogo, use_container_width=True)
 
 else:
-    st.info("👈 Inizia caricando uno o più file Excel dal menu laterale.")
+    st.info("👈 Carica uno o più file Excel dal menu a sinistra per iniziare la scansione dei dati.")
