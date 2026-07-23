@@ -16,23 +16,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS Custom per allargare la sidebar e stilizzare il pulsante principale
+# CSS Custom per stilizzare l'interfaccia
 st.markdown("""
     <style>
     [data-testid="stSidebar"] {
         min-width: 350px;
         max-width: 380px;
     }
-    .stMultiSelect div[data-baseweb="select"] span {
-        white-space: normal !important;
-        word-break: break-word !important;
-    }
     div.stButton > button[kind="primary"] {
         background-color: #1e3d59;
         color: white;
         font-weight: bold;
-        font-size: 16px;
-        padding: 10px 24px;
+        font-size: 18px;
+        padding: 12px 28px;
         border-radius: 8px;
     }
     </style>
@@ -279,7 +275,7 @@ def fit_trend_polinomiale(x, y, grado=3):
         return np.zeros_like(x)
 
 # =========================================================================
-# FLUSSO DELL'INTERFACCIA UTENTE
+# FLUSSO DELL'INTERFACCIA UTENTE (FORM BLOCANTE)
 # =========================================================================
 
 st.sidebar.header("1. Caricamento File")
@@ -296,155 +292,134 @@ if uploaded_files:
         st.error("Nessuna colonna valida di Posizione/Coppia trovata nei file caricati.")
     else:
         st.markdown("---")
-        st.subheader("📋 Selettore Dataset - File, Fogli e Cicli")
-        st.caption("Passo 1: Seleziona le curve da confrontare dal catalogo scansionato:")
-        
         etichette = [item['label'] for item in catalogo]
         
-        # Inizializzazione stati della sessione
-        if 'selected_curves' not in st.session_state:
-            st.session_state.selected_curves = []
-        if 'run_analysis' not in st.session_state:
-            st.session_state.run_analysis = False
+        # FORM DI SELEZIONE: Blocca l'esecuzione fino al click del pulsante!
+        with st.form("form_selezione_curve"):
+            st.subheader("📋 Selettore Dataset - File, Fogli e Cicli")
+            st.write(f"Trovati **{len(etichette)}** cicli validi nei file caricati.")
             
-        col_b1, col_b2, _ = st.columns([1.5, 1.5, 7])
-        if col_b1.button("✅ Seleziona Tutti"):
-            st.session_state.selected_curves = etichette
-            st.session_state.run_analysis = False
-            st.rerun()
+            seleziona_tutte = st.checkbox("✅ Seleziona automaticamente tutte le curve trovate")
             
-        if col_b2.button("❌ Deseleziona Tutti"):
-            st.session_state.selected_curves = []
-            st.session_state.run_analysis = False
-            st.rerun()
+            default_sel = etichette if seleziona_tutte else []
             
-        selezionate = st.multiselect(
-            "Curve disponibili:",
-            options=etichette,
-            default=st.session_state.selected_curves,
-            placeholder="Clicca qui per selezionare le curve da visualizzare..."
-        )
-        
-        # Se la selezione cambia, aggiorna lo stato
-        if selezionate != st.session_state.selected_curves:
-            st.session_state.selected_curves = selezionate
-            st.session_state.run_analysis = False
+            selezionate = st.multiselect(
+                "Scegli manualmente le curve da confrontare:",
+                options=etichette,
+                default=default_sel,
+                placeholder="Clicca qui e scegli i cicli da confrontare..."
+            )
+            
+            st.markdown("---")
+            submitted = st.form_submit_button("🚀 Genera Grafici e Confronta", type="primary", use_container_width=True)
 
-        st.markdown("---")
-        st.caption("Passo 2: Avvia la generazione dei grafici e dei calcoli:")
-        
-        # Pulsante di conferma generazione grafici
-        if st.button("🚀 Genera Grafici e Confronta", type="primary", use_container_width=True):
+        # I CALCOLI E I GRAFICI VENGONO ESEGUITI SOLO ED ESCLUSIVAMENTE QUANDO IL PULSANTE È PREMUTO
+        if submitted:
             if not selezionate:
-                st.warning("⚠️ Seleziona almeno una curva dall'elenco qui sopra prima di generare i grafici!")
-                st.session_state.run_analysis = False
+                st.warning("⚠️ Non hai selezionato alcuna curva! Seleziona almeno un ciclo dal menu sopra prima di proseguire.")
             else:
-                st.session_state.run_analysis = True
-
-        # ELABORAZIONE E GENERAZIONE GRAFICI SOLO SE IL PULSANTE È STATO PREMUTO
-        if st.session_state.run_analysis and selezionate:
-            dati_elaborati = []
-            
-            with st.spinner("Calcolo della rigidezza e generazione dei grafici in corso..."):
-                for item in catalogo:
-                    if item['label'] in selezionate:
-                        df = item['df']
-                        pos_raw = to_double_vector(df[item['pos_col']])
-                        cop_raw = to_double_vector(df[item['cop_col']])
-                        
-                        valid = ~np.isnan(pos_raw) & ~np.isnan(cop_raw)
-                        pos, cop = pos_raw[valid], cop_raw[valid]
-                        
-                        if len(pos) < 5:
-                            continue
+                dati_elaborati = []
+                
+                with st.spinner("Calcolo della rigidezza e generazione dei grafici in corso..."):
+                    for item in catalogo:
+                        if item['label'] in selezionate:
+                            df = item['df']
+                            pos_raw = to_double_vector(df[item['pos_col']])
+                            cop_raw = to_double_vector(df[item['cop_col']])
                             
-                        pos_and, cop_and, pos_rit, cop_rit = separa_andata_ritorno(pos, cop)
-                        
-                        # Segmentazione Positivi (PP) e Negativi (MM)
-                        idx_andPP = pos_and >= 0
-                        idx_andMM = pos_and <= 0
-                        idx_ritPP = pos_rit >= 0
-                        idx_ritMM = pos_rit <= 0
-                        
-                        pos_andPP, cop_andPP = pos_and[idx_andPP], cop_and[idx_andPP]
-                        pos_andMM, cop_andMM = pos_and[idx_andMM], cop_and[idx_andMM]
-                        pos_ritPP, cop_ritPP = pos_rit[idx_ritPP], cop_rit[idx_ritPP]
-                        pos_ritMM, cop_ritMM = pos_rit[idx_ritMM], cop_rit[idx_ritMM]
-                        
-                        cop_andPP, cop_ritPP, _ = azzera_coppia(pos_andPP, cop_andPP, cop_ritPP)
-                        cop_andMM, cop_ritMM, _ = azzera_coppia(pos_andMM, cop_andMM, cop_ritMM)
-                        
-                        th_andPP, _, rig_andPP, lav_andPP = funz_calcola_rigidezza(pos_andPP, cop_andPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
-                        th_ritPP, _, rig_ritPP, lav_ritPP = funz_calcola_rigidezza(pos_ritPP, cop_ritPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
-                        th_ritMM, _, rig_ritMM, lav_ritMM = funz_calcola_rigidezza(pos_ritMM, cop_ritMM, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
-                        
-                        e_dissipata = lav_andPP - lav_ritPP
-                        rig_max_ritMM = float(np.max(rig_ritMM)) if len(rig_ritMM) > 0 else 0.0
-                        
-                        trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
-                        trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
-                        
-                        dati_elaborati.append({
-                            'nome_breve': item['nome_breve'],
-                            'pos_andPP': pos_andPP, 'cop_andPP': cop_andPP,
-                            'pos_ritPP': pos_ritPP, 'cop_ritPP': cop_ritPP,
-                            'th_andPP': th_andPP, 'rig_andPP': rig_andPP, 'trend_andPP': trend_andPP,
-                            'th_ritPP': th_ritPP, 'rig_ritPP': rig_ritPP, 'trend_ritPP': trend_ritPP,
-                            'lav_andPP': lav_andPP,
-                            'lav_ritPP': lav_ritPP,
-                            'e_dissipata': e_dissipata,
-                            'lav_ritMM': lav_ritMM,
-                            'rig_max_ritMM': rig_max_ritMM
-                        })
+                            valid = ~np.isnan(pos_raw) & ~np.isnan(cop_raw)
+                            pos, cop = pos_raw[valid], cop_raw[valid]
+                            
+                            if len(pos) < 5:
+                                continue
+                                
+                            pos_and, cop_and, pos_rit, cop_rit = separa_andata_ritorno(pos, cop)
+                            
+                            # Segmentazione Positivi (PP) e Negativi (MM)
+                            idx_andPP = pos_and >= 0
+                            idx_andMM = pos_and <= 0
+                            idx_ritPP = pos_rit >= 0
+                            idx_ritMM = pos_rit <= 0
+                            
+                            pos_andPP, cop_andPP = pos_and[idx_andPP], cop_and[idx_andPP]
+                            pos_andMM, cop_andMM = pos_and[idx_andMM], cop_and[idx_andMM]
+                            pos_ritPP, cop_ritPP = pos_rit[idx_ritPP], cop_rit[idx_ritPP]
+                            pos_ritMM, cop_ritMM = pos_rit[idx_ritMM], cop_rit[idx_ritMM]
+                            
+                            cop_andPP, cop_ritPP, _ = azzera_coppia(pos_andPP, cop_andPP, cop_ritPP)
+                            cop_andMM, cop_ritMM, _ = azzera_coppia(pos_andMM, cop_andMM, cop_ritMM)
+                            
+                            th_andPP, _, rig_andPP, lav_andPP = funz_calcola_rigidezza(pos_andPP, cop_andPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
+                            th_ritPP, _, rig_ritPP, lav_ritPP = funz_calcola_rigidezza(pos_ritPP, cop_ritPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
+                            th_ritMM, _, rig_ritMM, lav_ritMM = funz_calcola_rigidezza(pos_ritMM, cop_ritMM, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
+                            
+                            e_dissipata = lav_andPP - lav_ritPP
+                            rig_max_ritMM = float(np.max(rig_ritMM)) if len(rig_ritMM) > 0 else 0.0
+                            
+                            trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
+                            trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
+                            
+                            dati_elaborati.append({
+                                'nome_breve': item['nome_breve'],
+                                'pos_andPP': pos_andPP, 'cop_andPP': cop_andPP,
+                                'pos_ritPP': pos_ritPP, 'cop_ritPP': cop_ritPP,
+                                'th_andPP': th_andPP, 'rig_andPP': rig_andPP, 'trend_andPP': trend_andPP,
+                                'th_ritPP': th_ritPP, 'rig_ritPP': rig_ritPP, 'trend_ritPP': trend_ritPP,
+                                'lav_andPP': lav_andPP,
+                                'lav_ritPP': lav_ritPP,
+                                'e_dissipata': e_dissipata,
+                                'lav_ritMM': lav_ritMM,
+                                'rig_max_ritMM': rig_max_ritMM
+                            })
 
-            if dati_elaborati:
-                # =========================================================
-                # GRAFICI (Griglia 2x2 come su MATLAB)
-                # =========================================================
-                fig, axs = plt.subplots(2, 2, figsize=(14, 9))
-                colors = plt.cm.tab10(np.linspace(0, 1, len(dati_elaborati)))
+                if dati_elaborati:
+                    # =========================================================
+                    # GRAFICI (Griglia 2x2 come su MATLAB)
+                    # =========================================================
+                    fig, axs = plt.subplots(2, 2, figsize=(14, 9))
+                    colors = plt.cm.tab10(np.linspace(0, 1, len(dati_elaborati)))
 
-                for i, d in enumerate(dati_elaborati):
-                    c = colors[i]
-                    # Subplot 1: Andata++
-                    axs[0, 0].plot(d['pos_andPP'], d['cop_andPP'], color=c, label=f"{d['nome_breve']} ({d['lav_andPP']:.2f} J)")
-                    # Subplot 2: Ritorno++
-                    axs[0, 1].plot(d['pos_ritPP'], d['cop_ritPP'], color=c, label=f"{d['nome_breve']} ({d['lav_ritPP']:.2f} J)")
-                    # Subplot 3: Rigidezza Andata++
-                    axs[1, 0].plot(d['th_andPP'], d['rig_andPP'], '--', color=c, alpha=0.4)
-                    axs[1, 0].plot(d['th_andPP'], d['trend_andPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
-                    # Subplot 4: Rigidezza Ritorno++
-                    axs[1, 1].plot(d['th_ritPP'], d['rig_ritPP'], '--', color=c, alpha=0.4)
-                    axs[1, 1].plot(d['th_ritPP'], d['trend_ritPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
+                    for i, d in enumerate(dati_elaborati):
+                        c = colors[i]
+                        # Subplot 1: Andata++
+                        axs[0, 0].plot(d['pos_andPP'], d['cop_andPP'], color=c, label=f"{d['nome_breve']} ({d['lav_andPP']:.2f} J)")
+                        # Subplot 2: Ritorno++
+                        axs[0, 1].plot(d['pos_ritPP'], d['cop_ritPP'], color=c, label=f"{d['nome_breve']} ({d['lav_ritPP']:.2f} J)")
+                        # Subplot 3: Rigidezza Andata++
+                        axs[1, 0].plot(d['th_andPP'], d['rig_andPP'], '--', color=c, alpha=0.4)
+                        axs[1, 0].plot(d['th_andPP'], d['trend_andPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
+                        # Subplot 4: Rigidezza Ritorno++
+                        axs[1, 1].plot(d['th_ritPP'], d['rig_ritPP'], '--', color=c, alpha=0.4)
+                        axs[1, 1].plot(d['th_ritPP'], d['trend_ritPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
 
-                titles = ['Andata++ (Flex di Spinta)', 'Ritorno++ (Rebound)', 'Rigidezza Andata++ (Flex)', 'Rigidezza Ritorno++ (Rebound)']
-                x_labels = ['Posizione [°]', 'Posizione [°]', 'Posizione [°]', 'Posizione [°]']
-                y_labels = ['Coppia [Nm]', 'Coppia [Nm]', 'Rigidezza [Nm/°]', 'Rigidezza [Nm/°]']
+                    titles = ['Andata++ (Flex di Spinta)', 'Ritorno++ (Rebound)', 'Rigidezza Andata++ (Flex)', 'Rigidezza Ritorno++ (Rebound)']
+                    x_labels = ['Posizione [°]', 'Posizione [°]', 'Posizione [°]', 'Posizione [°]']
+                    y_labels = ['Coppia [Nm]', 'Coppia [Nm]', 'Rigidezza [Nm/°]', 'Rigidezza [Nm/°]']
 
-                for idx, ax in enumerate(axs.flat):
-                    ax.set_title(titles[idx], fontweight='bold')
-                    ax.set_xlabel(x_labels[idx])
-                    ax.set_ylabel(y_labels[idx])
-                    ax.grid(True, linestyle=':', alpha=0.6)
-                    ax.legend(fontsize=8)
+                    for idx, ax in enumerate(axs.flat):
+                        ax.set_title(titles[idx], fontweight='bold')
+                        ax.set_xlabel(x_labels[idx])
+                        ax.set_ylabel(y_labels[idx])
+                        ax.grid(True, linestyle=':', alpha=0.6)
+                        ax.legend(fontsize=8)
 
-                plt.tight_layout()
-                st.pyplot(fig)
+                    plt.tight_layout()
+                    st.pyplot(fig)
 
-                # =========================================================
-                # TABELLA RIASSUNTIVA PRESTAZIONI (uitable)
-                # =========================================================
-                st.subheader("📊 Riepilogo Numerico Prestazioni")
-                
-                df_riepilogo = pd.DataFrame([{
-                    'Dataset / Prova': d['nome_breve'],
-                    'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
-                    'Dissipata [J]': f"{d['e_dissipata']:.2f}",
-                    'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
-                    'Rig. Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
-                } for d in dati_elaborati])
-                
-                st.dataframe(df_riepilogo, use_container_width=True)
+                    # =========================================================
+                    # TABELLA RIASSUNTIVA PRESTAZIONI (uitable)
+                    # =========================================================
+                    st.subheader("📊 Riepilogo Numerico Prestazioni")
+                    
+                    df_riepilogo = pd.DataFrame([{
+                        'Dataset / Prova': d['nome_breve'],
+                        'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
+                        'Dissipata [J]': f"{d['e_dissipata']:.2f}",
+                        'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
+                        'Rig. Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
+                    } for d in dati_elaborati])
+                    
+                    st.dataframe(df_riepilogo, use_container_width=True)
 
 else:
     st.info("👈 Carica uno o più file Excel dal menu a sinistra per iniziare la scansione dei dati.")
