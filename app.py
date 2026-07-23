@@ -422,6 +422,8 @@ if uploaded_files:
 
                             coppia_max = float(np.max(cop_andPP)) if len(cop_andPP) > 0 else 0.0
                             coppia_min = float(np.min(cop_ciclo)) if len(cop_ciclo) > 0 else 0.0
+                            angolo_max = float(np.max(pos_ciclo)) if len(pos_ciclo) > 0 else 0.0
+                            angolo_min = float(np.min(pos_ciclo)) if len(pos_ciclo) > 0 else 0.0
 
                             dati_elaborati.append({
                                 'nome_breve': item['nome_breve'],
@@ -438,6 +440,8 @@ if uploaded_files:
                                 'cop_ciclo': cop_ciclo,
                                 'coppia_max': coppia_max,
                                 'coppia_min': coppia_min,
+                                'angolo_max': angolo_max,
+                                'angolo_min': angolo_min,
                             })
 
                 if dati_elaborati:
@@ -448,7 +452,7 @@ if uploaded_files:
                     # =====================================================
                     # GRAFICO CICLO DI ISTERESI SOVRAPPOSTO (Plotly, zoomabile)
                     # =====================================================
-                    st.subheader("Ciclo di Isteresi")
+                    st.subheader("🔄 Ciclo di Isteresi Sovrapposto")
                     col_plot, col_tab = st.columns([2, 1])
 
                     with col_plot:
@@ -478,7 +482,9 @@ if uploaded_files:
                         df_minmax = pd.DataFrame([{
                             'Dataset': d['nome_breve'],
                             'Coppia Max [Nm]': f"{d['coppia_max']:.2f}",
-                            'Coppia Min [Nm]': f"{d['coppia_min']:.2f}"
+                            'Coppia Min [Nm]': f"{d['coppia_min']:.2f}",
+                            'Angolo Max [°]': f"{d['angolo_max']:.2f}",
+                            'Angolo Min [°]': f"{d['angolo_min']:.2f}"
                         } for d in dati_elaborati])
                         st.dataframe(df_minmax, use_container_width=True, hide_index=True)
 
@@ -600,10 +606,10 @@ if uploaded_files:
                     
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
-                        'Energia spesa(in flex) [J]': f"{d['lav_andPP']:.2f}",
+                        'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
                         'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
-                        'Energia spesa in tenuta post. [J]': f"{d['lav_ritMM']:.2f}",
-                        'Tenuta Max post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
+                        'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
+                        'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
                     st.dataframe(df_riepilogo, use_container_width=True)
