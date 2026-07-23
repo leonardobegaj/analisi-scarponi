@@ -16,7 +16,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS Custom per allargare la sidebar e migliorare la visibilità del selettore
+# CSS Custom per allargare la sidebar e stilizzare il pulsante principale
 st.markdown("""
     <style>
     [data-testid="stSidebar"] {
@@ -26,6 +26,14 @@ st.markdown("""
     .stMultiSelect div[data-baseweb="select"] span {
         white-space: normal !important;
         word-break: break-word !important;
+    }
+    div.stButton > button[kind="primary"] {
+        background-color: #1e3d59;
+        color: white;
+        font-weight: bold;
+        font-size: 16px;
+        padding: 10px 24px;
+        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -289,20 +297,25 @@ if uploaded_files:
     else:
         st.markdown("---")
         st.subheader("📋 Selettore Dataset - File, Fogli e Cicli")
-        st.caption("Seleziona le curve da confrontare dal catalogo scansionato:")
+        st.caption("Passo 1: Seleziona le curve da confrontare dal catalogo scansionato:")
         
         etichette = [item['label'] for item in catalogo]
         
-        # Gestione stato selezione
+        # Inizializzazione stati della sessione
         if 'selected_curves' not in st.session_state:
             st.session_state.selected_curves = []
+        if 'run_analysis' not in st.session_state:
+            st.session_state.run_analysis = False
             
         col_b1, col_b2, _ = st.columns([1.5, 1.5, 7])
         if col_b1.button("✅ Seleziona Tutti"):
             st.session_state.selected_curves = etichette
+            st.session_state.run_analysis = False
             st.rerun()
+            
         if col_b2.button("❌ Deseleziona Tutti"):
             st.session_state.selected_curves = []
+            st.session_state.run_analysis = False
             st.rerun()
             
         selezionate = st.multiselect(
@@ -312,66 +325,79 @@ if uploaded_files:
             placeholder="Clicca qui per selezionare le curve da visualizzare..."
         )
         
-        st.session_state.selected_curves = selezionate
+        # Se la selezione cambia, aggiorna lo stato
+        if selezionate != st.session_state.selected_curves:
+            st.session_state.selected_curves = selezionate
+            st.session_state.run_analysis = False
+
+        st.markdown("---")
+        st.caption("Passo 2: Avvia la generazione dei grafici e dei calcoli:")
         
-        if not selezionate:
-            st.info("👆 Seleziona almeno una curva dall'elenco qui sopra per visualizzare i grafici e la tabella dei dati.")
-        else:
+        # Pulsante di conferma generazione grafici
+        if st.button("🚀 Genera Grafici e Confronta", type="primary", use_container_width=True):
+            if not selezionate:
+                st.warning("⚠️ Seleziona almeno una curva dall'elenco qui sopra prima di generare i grafici!")
+                st.session_state.run_analysis = False
+            else:
+                st.session_state.run_analysis = True
+
+        # ELABORAZIONE E GENERAZIONE GRAFICI SOLO SE IL PULSANTE È STATO PREMUTO
+        if st.session_state.run_analysis and selezionate:
             dati_elaborati = []
             
-            for item in catalogo:
-                if item['label'] in selezionate:
-                    df = item['df']
-                    pos_raw = to_double_vector(df[item['pos_col']])
-                    cop_raw = to_double_vector(df[item['cop_col']])
-                    
-                    valid = ~np.isnan(pos_raw) & ~np.isnan(cop_raw)
-                    pos, cop = pos_raw[valid], cop_raw[valid]
-                    
-                    if len(pos) < 5:
-                        continue
+            with st.spinner("Calcolo della rigidezza e generazione dei grafici in corso..."):
+                for item in catalogo:
+                    if item['label'] in selezionate:
+                        df = item['df']
+                        pos_raw = to_double_vector(df[item['pos_col']])
+                        cop_raw = to_double_vector(df[item['cop_col']])
                         
-                    pos_and, cop_and, pos_rit, cop_rit = separa_andata_ritorno(pos, cop)
-                    
-                    # Segmentazione Positivi (PP) e Negativi (MM)
-                    idx_andPP = pos_and >= 0
-                    idx_andMM = pos_and <= 0
-                    idx_ritPP = pos_rit >= 0
-                    idx_ritMM = pos_rit <= 0
-                    
-                    pos_andPP, cop_andPP = pos_and[idx_andPP], cop_and[idx_andPP]
-                    pos_andMM, cop_andMM = pos_and[idx_andMM], cop_and[idx_andMM]
-                    pos_ritPP, cop_ritPP = pos_rit[idx_ritPP], cop_rit[idx_ritPP]
-                    pos_ritMM, cop_ritMM = pos_rit[idx_ritMM], cop_rit[idx_ritMM]
-                    
-                    cop_andPP, cop_ritPP, _ = azzera_coppia(pos_andPP, cop_andPP, cop_ritPP)
-                    cop_andMM, cop_ritMM, _ = azzera_coppia(pos_andMM, cop_andMM, cop_ritMM)
-                    
-                    th_andPP, _, rig_andPP, lav_andPP = funz_calcola_rigidezza(pos_andPP, cop_andPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
-                    th_ritPP, _, rig_ritPP, lav_ritPP = funz_calcola_rigidezza(pos_ritPP, cop_ritPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
-                    th_ritMM, _, rig_ritMM, lav_ritMM = funz_calcola_rigidezza(pos_ritMM, cop_ritMM, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
-                    
-                    e_dissipata = lav_andPP - lav_ritPP
-                    rig_max_ritMM = float(np.max(rig_ritMM)) if len(rig_ritMM) > 0 else 0.0
-                    
-                    trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
-                    trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
-                    
-                    dati_elaborati.append({
-                        'nome_breve': item['nome_breve'],
-                        'pos_andPP': pos_andPP, 'cop_andPP': cop_andPP,
-                        'pos_ritPP': pos_ritPP, 'cop_ritPP': cop_ritPP,
-                        'th_andPP': th_andPP, 'rig_andPP': rig_andPP, 'trend_andPP': trend_andPP,
-                        'th_ritPP': th_ritPP, 'rig_ritPP': rig_ritPP, 'trend_ritPP': trend_ritPP,
-                        'lav_andPP': lav_andPP,
-                        'lav_ritPP': lav_ritPP,
-                        'e_dissipata': e_dissipata,
-                        'lav_ritMM': lav_ritMM,
-                        'rig_max_ritMM': rig_max_ritMM
-                    })
+                        valid = ~np.isnan(pos_raw) & ~np.isnan(cop_raw)
+                        pos, cop = pos_raw[valid], cop_raw[valid]
+                        
+                        if len(pos) < 5:
+                            continue
+                            
+                        pos_and, cop_and, pos_rit, cop_rit = separa_andata_ritorno(pos, cop)
+                        
+                        # Segmentazione Positivi (PP) e Negativi (MM)
+                        idx_andPP = pos_and >= 0
+                        idx_andMM = pos_and <= 0
+                        idx_ritPP = pos_rit >= 0
+                        idx_ritMM = pos_rit <= 0
+                        
+                        pos_andPP, cop_andPP = pos_and[idx_andPP], cop_and[idx_andPP]
+                        pos_andMM, cop_andMM = pos_and[idx_andMM], cop_and[idx_andMM]
+                        pos_ritPP, cop_ritPP = pos_rit[idx_ritPP], cop_rit[idx_ritPP]
+                        pos_ritMM, cop_ritMM = pos_rit[idx_ritMM], cop_rit[idx_ritMM]
+                        
+                        cop_andPP, cop_ritPP, _ = azzera_coppia(pos_andPP, cop_andPP, cop_ritPP)
+                        cop_andMM, cop_ritMM, _ = azzera_coppia(pos_andMM, cop_andMM, cop_ritMM)
+                        
+                        th_andPP, _, rig_andPP, lav_andPP = funz_calcola_rigidezza(pos_andPP, cop_andPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
+                        th_ritPP, _, rig_ritPP, lav_ritPP = funz_calcola_rigidezza(pos_ritPP, cop_ritPP, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
+                        th_ritMM, _, rig_ritMM, lav_ritMM = funz_calcola_rigidezza(pos_ritMM, cop_ritMM, PASSO_SECANTE_DEG, N_PUNTI_INTERP)
+                        
+                        e_dissipata = lav_andPP - lav_ritPP
+                        rig_max_ritMM = float(np.max(rig_ritMM)) if len(rig_ritMM) > 0 else 0.0
+                        
+                        trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
+                        trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
+                        
+                        dati_elaborati.append({
+                            'nome_breve': item['nome_breve'],
+                            'pos_andPP': pos_andPP, 'cop_andPP': cop_andPP,
+                            'pos_ritPP': pos_ritPP, 'cop_ritPP': cop_ritPP,
+                            'th_andPP': th_andPP, 'rig_andPP': rig_andPP, 'trend_andPP': trend_andPP,
+                            'th_ritPP': th_ritPP, 'rig_ritPP': rig_ritPP, 'trend_ritPP': trend_ritPP,
+                            'lav_andPP': lav_andPP,
+                            'lav_ritPP': lav_ritPP,
+                            'e_dissipata': e_dissipata,
+                            'lav_ritMM': lav_ritMM,
+                            'rig_max_ritMM': rig_max_ritMM
+                        })
 
             if dati_elaborati:
-                st.markdown("---")
                 # =========================================================
                 # GRAFICI (Griglia 2x2 come su MATLAB)
                 # =========================================================
