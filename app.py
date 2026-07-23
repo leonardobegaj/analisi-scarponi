@@ -9,20 +9,45 @@ from scipy.interpolate import PchipInterpolator
 # Gestione compatibilità NumPy per l'integrale
 trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
-# Configurazione pagina a larghezza intera
+# Configurazione pagina
 st.set_page_config(
     page_title="ANALISI E CONFRONTO RIGIDEZZA SCARPONI",
     page_icon="🎿",
     layout="wide"
 )
 
-# CSS Custom per stilizzare l'interfaccia
+# =========================================================================
+# CSS CUSTOM PER CENTRARE TUTTI GLI ELEMENTI A SCHERMO
+# =========================================================================
 st.markdown("""
     <style>
+    /* 1. Centra il contenitore principale della pagina quando la sidebar si chiude */
+    .main .block-container {
+        max-width: 1100px !important;
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+        margin: 0 auto !important;
+    }
+    
+    /* 2. Centra i titoli principali, sottotitoli e testi */
+    h1, h2, h3, .stMarkdown p {
+        text-align: center !important;
+    }
+    
+    /* 3. Centra i box di avviso (st.info, st.warning, st.error) */
+    div[data-testid="stAlert"] {
+        text-align: center !important;
+        justify-content: center !important;
+        margin: 0 auto !important;
+    }
+
+    /* 4. Larghezza e stile Sidebar */
     [data-testid="stSidebar"] {
         min-width: 350px;
         max-width: 380px;
     }
+    
+    /* 5. Pulsante principale stilizzato e centrato */
     div.stButton > button[kind="primary"] {
         background-color: #1e3d59;
         color: white;
@@ -30,6 +55,8 @@ st.markdown("""
         font-size: 18px;
         padding: 12px 28px;
         border-radius: 8px;
+        display: block;
+        margin: 0 auto;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -42,13 +69,12 @@ N_PUNTI_INTERP = 1000
 GRADO_TREND_RIGIDEZZA = 3
 
 # =========================================================================
-# PARSING INTESTAZIONI E CATALOGAZIONE (IDENTICO A MATLAB)
+# PARSING INTESTAZIONI E CATALOGAZIONE
 # =========================================================================
 
 def estrai_info_header(header_str):
     header_str = str(header_str)
     
-    # 1. Identificazione Prova (es. paris_1, paris_2)
     tok_paris = re.search(r'(paris_\d+)', header_str, re.IGNORECASE)
     if tok_paris:
         prova = tok_paris.group(1)
@@ -62,11 +88,9 @@ def estrai_info_header(header_str):
             valide = [w for w in parole if w.lower() not in escludi]
             prova = valide[0] if valide else 'Prova'
             
-    # 2. Identificazione Sessione (es. Session 1 -> Sess.1)
     tok_s = re.search(r'Session\s*(\d+)', header_str, re.IGNORECASE)
     sess = f"Sess.{tok_s.group(1)}" if tok_s else ""
     
-    # 3. Identificazione Ciclo (es. Cycle 1 -> Cycle1)
     tok_c = re.search(r'(Cycle\s*\d+)', header_str, re.IGNORECASE)
     ciclo = tok_c.group(1).replace(" ", "") if tok_c else ""
     
@@ -91,7 +115,6 @@ def costruisci_catalogo(uploaded_files):
                 col_names = list(df.columns)
                 coppie_trovate = False
                 
-                # --- METODO 1: Riconoscimento Parole Chiave ---
                 c = 0
                 while c < num_cols:
                     col_name = str(col_names[c])
@@ -130,7 +153,6 @@ def costruisci_catalogo(uploaded_files):
                                 coppie_trovate = True
                     c += 1
                     
-                # --- METODO 2 (FALLBACK): Colonne numeriche adiacenti ---
                 if not coppie_trovate:
                     c = 0
                     while c < num_cols - 1:
@@ -275,7 +297,7 @@ def fit_trend_polinomiale(x, y, grado=3):
         return np.zeros_like(x)
 
 # =========================================================================
-# FLUSSO DELL'INTERFACCIA UTENTE (FORM BLOCANTE)
+# FLUSSO DELL'INTERFACCIA UTENTE
 # =========================================================================
 
 st.sidebar.header("1. Caricamento File")
@@ -294,7 +316,6 @@ if uploaded_files:
         st.markdown("---")
         etichette = [item['label'] for item in catalogo]
         
-        # FORM DI SELEZIONE: Blocca l'esecuzione fino al click del pulsante!
         with st.form("form_selezione_curve"):
             st.subheader("📋 Selettore Dataset - File, Fogli e Cicli")
             st.write(f"Trovati **{len(etichette)}** cicli validi nei file caricati.")
@@ -313,7 +334,6 @@ if uploaded_files:
             st.markdown("---")
             submitted = st.form_submit_button("🚀 Genera Grafici e Confronta", type="primary", use_container_width=True)
 
-        # ELABORAZIONE E GENERAZIONE GRAFICI SOLO ED ESCLUSIVAMENTE QUANDO IL PULSANTE È PREMUTO
         if submitted:
             if not selezionate:
                 st.warning("⚠️ Non hai selezionato alcuna curva! Seleziona almeno un ciclo dal menu sopra prima di proseguire.")
@@ -335,7 +355,6 @@ if uploaded_files:
                                 
                             pos_and, cop_and, pos_rit, cop_rit = separa_andata_ritorno(pos, cop)
                             
-                            # Segmentazione Positivi (PP) e Negativi (MM)
                             idx_andPP = pos_and >= 0
                             idx_andMM = pos_and <= 0
                             idx_ritPP = pos_rit >= 0
@@ -374,21 +393,17 @@ if uploaded_files:
 
                 if dati_elaborati:
                     # =========================================================
-                    # GRAFICI (Griglia 2x2 come su MATLAB)
+                    # GRAFICI (Griglia 2x2)
                     # =========================================================
-                    fig, axs = plt.subplots(2, 2, figsize=(14, 9))
+                    fig, axs = plt.subplots(2, 2, figsize=(13, 8.5))
                     colors = plt.cm.tab10(np.linspace(0, 1, len(dati_elaborati)))
 
                     for i, d in enumerate(dati_elaborati):
                         c = colors[i]
-                        # Subplot 1: Andata++ (Coppia)
                         axs[0, 0].plot(d['pos_andPP'], d['cop_andPP'], color=c, label=f"{d['nome_breve']} ({d['lav_andPP']:.2f} J)")
-                        # Subplot 2: Ritorno++ (Coppia)
                         axs[0, 1].plot(d['pos_ritPP'], d['cop_ritPP'], color=c, label=f"{d['nome_breve']} ({d['lav_ritPP']:.2f} J)")
-                        # Subplot 3: Rigidezza Andata++
                         axs[1, 0].plot(d['th_andPP'], d['rig_andPP'], '--', color=c, alpha=0.4)
                         axs[1, 0].plot(d['th_andPP'], d['trend_andPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
-                        # Subplot 4: Rigidezza Ritorno++
                         axs[1, 1].plot(d['th_ritPP'], d['rig_ritPP'], '--', color=c, alpha=0.4)
                         axs[1, 1].plot(d['th_ritPP'], d['trend_ritPP'], '-', color=c, label=d['nome_breve'], linewidth=2)
 
@@ -403,16 +418,12 @@ if uploaded_files:
                         ax.grid(True, linestyle=':', alpha=0.6)
                         ax.legend(fontsize=8)
 
-                    # =========================================================
-                    # UNIFICAZIONE ASSI Y (Andata vs Ritorno)
-                    # =========================================================
-                    # 1. Unificazione Asse Y per la Coppia (Subplot 1 e 2)
+                    # UNIFICAZIONE ASSI Y
                     y_min_cop = min(axs[0, 0].get_ylim()[0], axs[0, 1].get_ylim()[0])
                     y_max_cop = max(axs[0, 0].get_ylim()[1], axs[0, 1].get_ylim()[1])
                     axs[0, 0].set_ylim(y_min_cop, y_max_cop)
                     axs[0, 1].set_ylim(y_min_cop, y_max_cop)
 
-                    # 2. Unificazione Asse Y per la Rigidezza (Subplot 3 e 4)
                     y_min_rig = min(axs[1, 0].get_ylim()[0], axs[1, 1].get_ylim()[0])
                     y_max_rig = max(axs[1, 0].get_ylim()[1], axs[1, 1].get_ylim()[1])
                     axs[1, 0].set_ylim(y_min_rig, y_max_rig)
@@ -422,7 +433,7 @@ if uploaded_files:
                     st.pyplot(fig)
 
                     # =========================================================
-                    # TABELLA RIASSUNTIVA PRESTAZIONI (uitable)
+                    # TABELLA RIASSUNTIVA PRESTAZIONI
                     # =========================================================
                     st.subheader("📊 Riepilogo Numerico Prestazioni")
                     
