@@ -34,7 +34,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🎿 Confronto Meccanico Rigidezza e Isteresi")
+st.title("🎿 ANALISI E CONFRONTO RIGIDEZZA SCARPONI")
 
 # PARAMETRI CALCOLO FISICO (uguali allo script MATLAB)
 PASSO_SECANTE_DEG = 0.25
