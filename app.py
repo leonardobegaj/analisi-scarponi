@@ -11,7 +11,7 @@ trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
 # Configurazione pagina (barra laterale sempre espansa)
 st.set_page_config(
-    page_title="Confronto Rigidezza & Isteresi Scarponi",
+    page_title="ANALISI E CONFRONTO RIGIDEZZA SCARPONI",
     page_icon="🎿",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -462,9 +462,9 @@ if uploaded_files:
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
                         'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
-                        'Dissipata [J]': f"{d['e_dissipata']:.2f}",
+                        'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
                         'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
-                        'Rig. Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
+                        'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
                     st.dataframe(df_riepilogo, use_container_width=True)
