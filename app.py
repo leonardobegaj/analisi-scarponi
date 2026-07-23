@@ -337,7 +337,6 @@ def fit_trend_polinomiale(x, y, grado=3):
     except Exception:
         return np.zeros_like(x)
 
-# Funzione ausiliaria per centrare e formattare le tabelle
 def mostra_tabella_centrata(df):
     styler = df.style.set_properties(**{'text-align': 'center'}).set_table_styles([
         {'selector': 'th', 'props': [('text-align', 'center')]}
@@ -426,7 +425,7 @@ if uploaded_files:
                             trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
                             trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
 
-                            # Reconstruction of complete hysteresis loop
+                            # Ricostruzione del ciclo di isteresi completo
                             pos_and_full = np.concatenate([pos_andMM, pos_andPP])
                             cop_and_full = np.concatenate([cop_andMM, cop_andPP])
                             pos_rit_full = np.concatenate([pos_ritPP, pos_ritMM])
@@ -501,7 +500,6 @@ if uploaded_files:
                             'Angolo Min [°]': f"{d['angolo_min']:.2f}"
                         } for d in dati_elaborati])
                         
-                        # Indice da 1 a N e intestazione 'N°' compatta
                         df_minmax.index = range(1, len(df_minmax) + 1)
                         df_minmax.index.name = "N°"
                         mostra_tabella_centrata(df_minmax)
@@ -518,7 +516,11 @@ if uploaded_files:
                             )
                         st.markdown(legenda_html, unsafe_allow_html=True)
 
+                    # =====================================================
+                    # LINEA E NUOVO TITOLO PER I RAMI SEPARATI
+                    # =====================================================
                     st.markdown("---")
+                    st.subheader("📈 Confronto rigidezza con rami di curva separati")
 
                     # =====================================================
                     # GRIGLIA 2x2
@@ -630,7 +632,6 @@ if uploaded_files:
                         'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
-                    # Indice da 1 a N e intestazione 'N°' compatta
                     df_riepilogo.index = range(1, len(df_riepilogo) + 1)
                     df_riepilogo.index.name = "N°"
                     
