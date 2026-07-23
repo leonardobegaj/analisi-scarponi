@@ -9,40 +9,47 @@ from scipy.interpolate import PchipInterpolator
 # Gestione compatibilità NumPy per l'integrale
 trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
-# Configurazione pagina
+# Configurazione pagina (barra laterale sempre espansa)
 st.set_page_config(
     page_title="Confronto Rigidezza & Isteresi Scarponi",
     page_icon="🎿",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # =========================================================================
-# CSS CUSTOM PER CENTRARE PERFETTAMENTE ED EVITARE CHE IL TITOLO VENGA TAGLIATO
+# CSS CUSTOM: CENTRAGGIO + BLOCCO DEFINITIVO BARRA LATERALE
 # =========================================================================
 st.markdown("""
     <style>
-    /* 1. Aumenta lo spazio in alto per NON far tagliare il titolo sotto la barra di Streamlit */
+    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR (Rende la barra permanente) */
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+
+    /* 2. Spazio in alto per evitare che il titolo venga sovrapposto */
     .main .block-container {
         max-width: 1100px !important;
-        padding-top: 5.5rem !important;
+        padding-top: 5rem !important;
         padding-bottom: 3rem !important;
         margin-left: auto !important;
         margin-right: auto !important;
     }
     
-    /* 2. Centra i titoli principali, sottotitoli e testi */
+    /* 3. Centra titoli e testi */
     h1, h2, h3, .stMarkdown p {
         text-align: center !important;
     }
     
-    /* 3. Centra il riquadro del Selettore Dataset (st.form) */
+    /* 4. Centra il riquadro del Selettore Dataset */
     div[data-testid="stForm"] {
         margin-left: auto !important;
         margin-right: auto !important;
         max-width: 1000px !important;
     }
 
-    /* 4. Centra i messaggi di avviso */
+    /* 5. Centra i messaggi di avviso */
     div[data-testid="stAlert"] {
         text-align: center !important;
         margin-left: auto !important;
@@ -50,19 +57,19 @@ st.markdown("""
         max-width: 1000px !important;
     }
 
-    /* 5. Centra la visualizzazione dei grafici */
+    /* 6. Centra i grafici */
     div[data-testid="stPlotlyChart"], div[data-testid="stpyplot"] {
         display: flex !important;
         justify-content: center !important;
     }
 
-    /* 6. Larghezza e stile Sidebar */
+    /* 7. Larghezza fissa e stile Sidebar */
     [data-testid="stSidebar"] {
         min-width: 350px;
         max-width: 380px;
     }
     
-    /* 7. Pulsante principale centrato */
+    /* 8. Pulsante principale centrato */
     div.stButton > button[kind="primary"] {
         background-color: #ff4b4b;
         color: white;
