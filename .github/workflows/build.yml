@@ -23,7 +23,7 @@ jobs:
 
       - name: Build EXE with PyInstaller
         run: |
-          pyinstaller --noconfirm --onedir --windowed --name "Analisi_Scarponi" app.py
+          pyinstaller --noconfirm --onedir --name "Analisi_Scarponi" --copy-metadata streamlit --collect-all streamlit --add-data "app.py;." run_app.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
