@@ -20,11 +20,11 @@ st.set_page_config(
 )
 
 # =========================================================================
-# CSS CUSTOM: CENTRAGGIO + BLOCCO DEFINITIVO BARRA LATERALE
+# CSS CUSTOM: CENTRAGGIO + BLOCCO DEFINITIVO BARRA LATERALE + STILE TABELLE
 # =========================================================================
 st.markdown("""
     <style>
-    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR (Rende la barra permanente) */
+    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR */
     [data-testid="stSidebarCollapseButton"],
     [data-testid="collapsedControl"] {
         display: none !important;
@@ -32,8 +32,8 @@ st.markdown("""
 
     /* 2. Spazio in alto per evitare che il titolo venga sovrapposto */
     .main .block-container {
-        max-width: 1100px !important;
-        padding-top: 5rem !important;
+        max-width: 1200px !important;
+        padding-top: 4rem !important;
         padding-bottom: 3rem !important;
         margin-left: auto !important;
         margin-right: auto !important;
@@ -82,12 +82,22 @@ st.markdown("""
         display: block;
         margin: 0 auto;
     }
+
+    /* 9. CENTRAGGIO DEL CONTENUTO E DELLE INTESTAZIONI IN TUTTE LE TABELLE */
+    div[data-testid="stDataFrame"] div[role="gridcell"], 
+    div[data-testid="stDataFrame"] div[role="columnheader"] {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+    table.dataframe td, table.dataframe th {
+        text-align: center !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("🎿 ANALISI E CONFRONTO RIGIDEZZA SCARPONI")
 
-# PARAMETRI CALCOLO FISICO (uguali allo script MATLAB)
+# PARAMETRI CALCOLO FISICO
 PASSO_SECANTE_DEG = 0.25
 N_PUNTI_INTERP = 1000
 GRADO_TREND_RIGIDEZZA = 3
@@ -327,6 +337,13 @@ def fit_trend_polinomiale(x, y, grado=3):
     except Exception:
         return np.zeros_like(x)
 
+# Funzione ausiliaria per centrare e formattare le tabelle
+def mostra_tabella_centrata(df):
+    styler = df.style.set_properties(**{'text-align': 'center'}).set_table_styles([
+        {'selector': 'th', 'props': [('text-align', 'center')]}
+    ])
+    st.dataframe(styler, use_container_width=True)
+
 # =========================================================================
 # FLUSSO DELL'INTERFACCIA UTENTE
 # =========================================================================
@@ -409,9 +426,7 @@ if uploaded_files:
                             trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
                             trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
 
-                            # =================================================
-                            # RICOSTRUZIONE CICLO DI ISTERESI COMPLETO (chiuso)
-                            # =================================================
+                            # Reconstruction of complete hysteresis loop
                             pos_and_full = np.concatenate([pos_andMM, pos_andPP])
                             cop_and_full = np.concatenate([cop_andMM, cop_andPP])
                             pos_rit_full = np.concatenate([pos_ritPP, pos_ritMM])
@@ -445,12 +460,11 @@ if uploaded_files:
                             })
 
                 if dati_elaborati:
-                    # Palette colori coerente (equivalente a tab10 di matplotlib)
                     palette = pc.qualitative.Plotly + pc.qualitative.D3 + pc.qualitative.Set2
                     colors = [palette[i % len(palette)] for i in range(len(dati_elaborati))]
 
                     # =====================================================
-                    # GRAFICO CICLO DI ISTERESI SOVRAPPOSTO (Plotly, zoomabile)
+                    # GRAFICO CICLO DI ISTERESI SOVRAPPOSTO
                     # =====================================================
                     st.subheader("Ciclo di Isteresi")
                     col_plot, col_tab = st.columns([2, 1])
@@ -486,7 +500,11 @@ if uploaded_files:
                             'Angolo Max [°]': f"{d['angolo_max']:.2f}",
                             'Angolo Min [°]': f"{d['angolo_min']:.2f}"
                         } for d in dati_elaborati])
-                        st.dataframe(df_minmax, use_container_width=True, hide_index=True)
+                        
+                        # Indice da 1 a N e intestazione 'N°' compatta
+                        df_minmax.index = range(1, len(df_minmax) + 1)
+                        df_minmax.index.name = "N°"
+                        mostra_tabella_centrata(df_minmax)
 
                         st.markdown("**Legenda**")
                         legenda_html = ""
@@ -503,7 +521,7 @@ if uploaded_files:
                     st.markdown("---")
 
                     # =====================================================
-                    # GRIGLIA 2x2 (Plotly, zoomabile)
+                    # GRIGLIA 2x2
                     # =====================================================
                     titles = ['Andata++ (Flex di Spinta)', 'Ritorno++ (Rebound)',
                               'Rigidezza Andata++ (Flex)', 'Rigidezza Ritorno++ (Rebound)']
@@ -517,7 +535,7 @@ if uploaded_files:
 
                     for i, d in enumerate(dati_elaborati):
                         c = colors[i]
-                        show_legend = True  # una voce di legenda per dataset (raggruppata)
+                        show_legend = True
 
                         # Coppia vs Posizione - Andata++
                         fig.add_trace(go.Scatter(
@@ -535,7 +553,7 @@ if uploaded_files:
                             legendgroup=d['nome_breve'], showlegend=False
                         ), row=1, col=2)
 
-                        # Rigidezza Andata++ (grezza tratteggiata + trend)
+                        # Rigidezza Andata++
                         fig.add_trace(go.Scatter(
                             x=d['th_andPP'], y=d['rig_andPP'],
                             mode='lines', line=dict(color=c, width=1, dash='dash'),
@@ -549,7 +567,7 @@ if uploaded_files:
                             legendgroup=d['nome_breve'], showlegend=False
                         ), row=2, col=1)
 
-                        # Rigidezza Ritorno++ (grezza tratteggiata + trend)
+                        # Rigidezza Ritorno++
                         fig.add_trace(go.Scatter(
                             x=d['th_ritPP'], y=d['rig_ritPP'],
                             mode='lines', line=dict(color=c, width=1, dash='dash'),
@@ -572,7 +590,7 @@ if uploaded_files:
                     fig.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=1)
                     fig.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=2)
 
-                    # Unificazione assi Y (Coppia in alto, Rigidezza in basso), come nell'originale
+                    # Unificazione assi Y
                     y_cop_all = np.concatenate([d['cop_andPP'] for d in dati_elaborati] + [d['cop_ritPP'] for d in dati_elaborati])
                     y_rig_all = np.concatenate([d['rig_andPP'] for d in dati_elaborati] + [d['rig_ritPP'] for d in dati_elaborati])
                     if len(y_cop_all) > 0:
@@ -612,7 +630,11 @@ if uploaded_files:
                         'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
-                    st.dataframe(df_riepilogo, use_container_width=True)
+                    # Indice da 1 a N e intestazione 'N°' compatta
+                    df_riepilogo.index = range(1, len(df_riepilogo) + 1)
+                    df_riepilogo.index.name = "N°"
+                    
+                    mostra_tabella_centrata(df_riepilogo)
 
 else:
     st.info("👈 Carica uno o più file Excel dal menu a sinistra per iniziare la scansione dei dati.")
