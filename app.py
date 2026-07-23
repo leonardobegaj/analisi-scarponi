@@ -458,7 +458,8 @@ if uploaded_files:
                                 x=d['pos_ciclo'], y=d['cop_ciclo'],
                                 mode='lines',
                                 line=dict(color=colors[i], width=2),
-                                name=d['nome_breve']
+                                name=d['nome_breve'],
+                                showlegend=False
                             ))
                         fig_ist.add_hline(y=0, line_color="black", line_width=1.2)
                         fig_ist.add_vline(x=0, line_color="black", line_width=1.2)
@@ -468,7 +469,6 @@ if uploaded_files:
                             yaxis_title="Coppia [Nm]",
                             template="plotly_white",
                             height=520,
-                            legend=dict(font=dict(size=9)),
                             margin=dict(t=50, b=40, l=50, r=20),
                         )
                         st.plotly_chart(fig_ist, use_container_width=True, config=PLOTLY_CONFIG)
@@ -481,6 +481,18 @@ if uploaded_files:
                             'Coppia Min [Nm]': f"{d['coppia_min']:.2f}"
                         } for d in dati_elaborati])
                         st.dataframe(df_minmax, use_container_width=True, hide_index=True)
+
+                        st.markdown("**Legenda**")
+                        legenda_html = ""
+                        for i, d in enumerate(dati_elaborati):
+                            legenda_html += (
+                                f"<div style='display:flex; align-items:center; margin-bottom:4px;'>"
+                                f"<span style='display:inline-block; width:14px; height:14px; "
+                                f"background-color:{colors[i]}; border-radius:3px; margin-right:8px; flex-shrink:0;'></span>"
+                                f"<span style='font-size:12.5px;'>{d['nome_breve']}</span>"
+                                f"</div>"
+                            )
+                        st.markdown(legenda_html, unsafe_allow_html=True)
 
                     st.markdown("---")
 
@@ -568,9 +580,16 @@ if uploaded_files:
 
                     fig.update_layout(
                         template="plotly_white",
-                        height=780,
-                        legend=dict(font=dict(size=9)),
-                        margin=dict(t=60, b=40, l=50, r=20),
+                        height=850,
+                        legend=dict(
+                            orientation="h",
+                            font=dict(size=9),
+                            yanchor="bottom",
+                            y=1.06,
+                            xanchor="center",
+                            x=0.5,
+                        ),
+                        margin=dict(t=140, b=40, l=50, r=20),
                     )
                     st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
