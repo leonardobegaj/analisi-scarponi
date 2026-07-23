@@ -457,7 +457,6 @@ if uploaded_files:
                                 text=[d['nome_breve']] * len(d['pos_ciclo'])
                             ))
 
-                        # Assi di riferimento zero
                         fig_ist.add_hline(y=0, line_width=1.2, line_dash="solid", line_color="black")
                         fig_ist.add_vline(x=0, line_width=1.2, line_dash="solid", line_color="black")
 
@@ -490,6 +489,30 @@ if uploaded_files:
                     st.subheader("📈 Dettaglio Flex, Rebound e Rigidezza (Interattivi)")
                     st.caption("💡 Fai clic sulle voci della legenda in alto a destra per attivare/disattivare specifiche curve su tutti e 4 i grafici contemporaneamente.")
 
+                    # CALCOLO SCALE Y UNIFICATE
+                    all_cop, all_rig = [], []
+                    for d in dati_elaborati:
+                        all_cop.extend(d['cop_andPP'])
+                        all_cop.extend(d['cop_ritPP'])
+                        all_rig.extend(d['rig_andPP'])
+                        all_rig.extend(d['trend_andPP'])
+                        all_rig.extend(d['rig_ritPP'])
+                        all_rig.extend(d['trend_ritPP'])
+
+                    if all_cop:
+                        c_min, c_max = float(np.min(all_cop)), float(np.max(all_cop))
+                        c_margin = (c_max - c_min) * 0.05 if c_max != c_min else 1.0
+                        y_range_cop = [min(0.0, c_min - c_margin), c_max + c_margin]
+                    else:
+                        y_range_cop = None
+
+                    if all_rig:
+                        r_min, r_max = float(np.min(all_rig)), float(np.max(all_rig))
+                        r_margin = (r_max - r_min) * 0.05 if r_max != r_min else 1.0
+                        y_range_rig = [min(0.0, r_min - r_margin), r_max + r_margin]
+                    else:
+                        y_range_rig = None
+
                     fig_2x2 = make_subplots(
                         rows=2, cols=2,
                         subplot_titles=(
@@ -497,7 +520,7 @@ if uploaded_files:
                             "Rigidezza Andata++ (Flex)", "Rigidezza Ritorno++ (Rebound)"
                         ),
                         horizontal_spacing=0.08,
-                        vertical_spacing=0.12
+                        vertical_spacing=0.22  # Spaziatura verticale aumentata
                     )
 
                     for i, d in enumerate(dati_elaborati):
@@ -577,14 +600,20 @@ if uploaded_files:
                     fig_2x2.update_xaxes(title_text="Posizione [°]", row=2, col=2)
 
                     fig_2x2.update_yaxes(title_text="Coppia [Nm]", row=1, col=1)
-                    fig_2x2.update_yaxes(title_text="Coppia [Nm]", row=1, col=2)
+                    fig_2x2.update_yaxes(title_text="Coppia [Nm]", row=1, col=2, matches='y')
                     fig_2x2.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=1)
-                    fig_2x2.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=2)
+                    fig_2x2.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=2, matches='y3')
 
-                    # Layout generale e coordinamento dell'unificazione scala Y
+                    # Forzatura del range Y unificato su riga 1 e riga 2
+                    if y_range_cop:
+                        fig_2x2.update_yaxes(range=y_range_cop, row=1, col=1)
+                    if y_range_rig:
+                        fig_2x2.update_yaxes(range=y_range_rig, row=2, col=1)
+
+                    # Layout generale
                     fig_2x2.update_layout(
                         template="plotly_white",
-                        height=750,
+                        height=800,
                         margin=dict(l=20, r=20, t=50, b=20),
                         legend=dict(
                             orientation="h",
