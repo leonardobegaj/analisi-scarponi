@@ -313,7 +313,7 @@ if uploaded_files:
             st.markdown("---")
             submitted = st.form_submit_button("🚀 Genera Grafici e Confronta", type="primary", use_container_width=True)
 
-        # I CALCOLI E I GRAFICI VENGONO ESEGUITI SOLO ED ESCLUSIVAMENTE QUANDO IL PULSANTE È PREMUTO
+        # ELABORAZIONE E GENERAZIONE GRAFICI SOLO ED ESCLUSIVAMENTE QUANDO IL PULSANTE È PREMUTO
         if submitted:
             if not selezionate:
                 st.warning("⚠️ Non hai selezionato alcuna curva! Seleziona almeno un ciclo dal menu sopra prima di proseguire.")
@@ -381,9 +381,9 @@ if uploaded_files:
 
                     for i, d in enumerate(dati_elaborati):
                         c = colors[i]
-                        # Subplot 1: Andata++
+                        # Subplot 1: Andata++ (Coppia)
                         axs[0, 0].plot(d['pos_andPP'], d['cop_andPP'], color=c, label=f"{d['nome_breve']} ({d['lav_andPP']:.2f} J)")
-                        # Subplot 2: Ritorno++
+                        # Subplot 2: Ritorno++ (Coppia)
                         axs[0, 1].plot(d['pos_ritPP'], d['cop_ritPP'], color=c, label=f"{d['nome_breve']} ({d['lav_ritPP']:.2f} J)")
                         # Subplot 3: Rigidezza Andata++
                         axs[1, 0].plot(d['th_andPP'], d['rig_andPP'], '--', color=c, alpha=0.4)
@@ -402,6 +402,21 @@ if uploaded_files:
                         ax.set_ylabel(y_labels[idx])
                         ax.grid(True, linestyle=':', alpha=0.6)
                         ax.legend(fontsize=8)
+
+                    # =========================================================
+                    # UNIFICAZIONE ASSI Y (Andata vs Ritorno)
+                    # =========================================================
+                    # 1. Unificazione Asse Y per la Coppia (Subplot 1 e 2)
+                    y_min_cop = min(axs[0, 0].get_ylim()[0], axs[0, 1].get_ylim()[0])
+                    y_max_cop = max(axs[0, 0].get_ylim()[1], axs[0, 1].get_ylim()[1])
+                    axs[0, 0].set_ylim(y_min_cop, y_max_cop)
+                    axs[0, 1].set_ylim(y_min_cop, y_max_cop)
+
+                    # 2. Unificazione Asse Y per la Rigidezza (Subplot 3 e 4)
+                    y_min_rig = min(axs[1, 0].get_ylim()[0], axs[1, 1].get_ylim()[0])
+                    y_max_rig = max(axs[1, 0].get_ylim()[1], axs[1, 1].get_ylim()[1])
+                    axs[1, 0].set_ylim(y_min_rig, y_max_rig)
+                    axs[1, 1].set_ylim(y_min_rig, y_max_rig)
 
                     plt.tight_layout()
                     st.pyplot(fig)
