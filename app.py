@@ -452,7 +452,7 @@ if uploaded_files:
                     # =====================================================
                     # GRAFICO CICLO DI ISTERESI SOVRAPPOSTO (Plotly, zoomabile)
                     # =====================================================
-                    st.subheader("🔄 Ciclo di Isteresi Sovrapposto")
+                    st.subheader("Ciclo di Isteresi")
                     col_plot, col_tab = st.columns([2, 1])
 
                     with col_plot:
@@ -478,7 +478,7 @@ if uploaded_files:
                         st.plotly_chart(fig_ist, use_container_width=True, config=PLOTLY_CONFIG)
 
                     with col_tab:
-                        st.markdown("**Coppia Max/Min**")
+                        st.markdown("**Tabella Coppia e Angoli Max/Min**")
                         df_minmax = pd.DataFrame([{
                             'Dataset': d['nome_breve'],
                             'Coppia Max [Nm]': f"{d['coppia_max']:.2f}",
@@ -606,9 +606,9 @@ if uploaded_files:
                     
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
-                        'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
+                        'Energia spesa in flex [J]': f"{d['lav_andPP']:.2f}",
                         'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
-                        'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
+                        'Energia spesa in tenuta post. [J]': f"{d['lav_ritMM']:.2f}",
                         'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
