@@ -22,16 +22,16 @@ st.set_page_config(
 # =========================================================================
 st.markdown("""
     <style>
-    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR */
+    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR (Rende la barra permanente) */
     [data-testid="stSidebarCollapseButton"],
     [data-testid="collapsedControl"] {
         display: none !important;
     }
 
-    /* 2. Spazio in alto e larghezza contenitore principale */
+    /* 2. Spazio in alto per evitare che il titolo venga sovrapposto */
     .main .block-container {
-        max-width: 1200px !important;
-        padding-top: 4rem !important;
+        max-width: 1100px !important;
+        padding-top: 5rem !important;
         padding-bottom: 3rem !important;
         margin-left: auto !important;
         margin-right: auto !important;
@@ -46,7 +46,7 @@ st.markdown("""
     div[data-testid="stForm"] {
         margin-left: auto !important;
         margin-right: auto !important;
-        max-width: 1100px !important;
+        max-width: 1000px !important;
     }
 
     /* 5. Centra i messaggi di avviso */
@@ -54,7 +54,7 @@ st.markdown("""
         text-align: center !important;
         margin-left: auto !important;
         margin-right: auto !important;
-        max-width: 1100px !important;
+        max-width: 1000px !important;
     }
 
     /* 6. Centra i grafici */
@@ -85,7 +85,7 @@ st.markdown("""
 
 st.title("🎿 ANALISI E CONFRONTO RIGIDEZZA SCARPONI")
 
-# PARAMETRI CALCOLO FISICO
+# PARAMETRI CALCOLO FISICO (uguali allo script MATLAB)
 PASSO_SECANTE_DEG = 0.25
 N_PUNTI_INTERP = 1000
 GRADO_TREND_RIGIDEZZA = 3
@@ -343,6 +343,7 @@ if uploaded_files:
             st.write(f"Trovati **{len(etichette)}** cicli validi nei file caricati.")
             
             seleziona_tutte = st.checkbox("✅ Seleziona automaticamente tutte le curve trovate")
+            
             default_sel = etichette if seleziona_tutte else []
             
             selezionate = st.multiselect(
@@ -395,17 +396,31 @@ if uploaded_files:
                             
                             e_dissipata = lav_andPP - lav_ritPP
                             rig_max_ritMM = float(np.max(rig_ritMM)) if len(rig_ritMM) > 0 else 0.0
-                            
-                            # NUOVI PARAMETRI: Coppia Massima (Andata++) e Coppia Minima (Ciclo Completo)
-                            cop_max_spinta = float(np.max(cop_andPP)) if len(cop_andPP) > 0 else 0.0
-                            cop_min_totale = float(np.min(cop)) if len(cop) > 0 else 0.0
-                            
+
                             trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
                             trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
-                            
+
+                            # =================================================
+                            # RICOSTRUZIONE CICLO DI ISTERESI COMPLETO (chiuso)
+                            # Riunisce i quattro rami (andata/ritorno, +/-) già
+                            # azzerati in un unico percorso chiuso, nell'ordine
+                            # corretto di percorrenza del ciclo.
+                            # =================================================
+                            pos_and_full = np.concatenate([pos_andMM, pos_andPP])
+                            cop_and_full = np.concatenate([cop_andMM, cop_andPP])
+                            pos_rit_full = np.concatenate([pos_ritPP, pos_ritMM])
+                            cop_rit_full = np.concatenate([cop_ritPP, cop_ritMM])
+
+                            pos_ciclo = np.concatenate([pos_and_full, pos_rit_full])
+                            cop_ciclo = np.concatenate([cop_and_full, cop_rit_full])
+
+                            # Coppia massima: valore massimo sul ramo Andata++ (Flex di Spinta)
+                            coppia_max = float(np.max(cop_andPP)) if len(cop_andPP) > 0 else 0.0
+                            # Coppia minima: valore minimo sull'intero ciclo di isteresi chiuso
+                            coppia_min = float(np.min(cop_ciclo)) if len(cop_ciclo) > 0 else 0.0
+
                             dati_elaborati.append({
                                 'nome_breve': item['nome_breve'],
-                                'pos_tot': pos, 'cop_tot': cop,
                                 'pos_andPP': pos_andPP, 'cop_andPP': cop_andPP,
                                 'pos_ritPP': pos_ritPP, 'cop_ritPP': cop_ritPP,
                                 'th_andPP': th_andPP, 'rig_andPP': rig_andPP, 'trend_andPP': trend_andPP,
@@ -415,52 +430,53 @@ if uploaded_files:
                                 'e_dissipata': e_dissipata,
                                 'lav_ritMM': lav_ritMM,
                                 'rig_max_ritMM': rig_max_ritMM,
-                                'cop_max_spinta': cop_max_spinta,
-                                'cop_min_totale': cop_min_totale
+                                'pos_ciclo': pos_ciclo,
+                                'cop_ciclo': cop_ciclo,
+                                'coppia_max': coppia_max,
+                                'coppia_min': coppia_min,
                             })
 
                 if dati_elaborati:
                     colors = plt.cm.tab10(np.linspace(0, 1, len(dati_elaborati)))
-                    
+
                     # =========================================================
-                    # 1. GRAFICO CICLO ISTERESI COMPLETO + MINI TABELLA COPPIE
+                    # NUOVO: GRAFICO CICLO DI ISTERESI SOVRAPPOSTO + MINI TABELLA
                     # =========================================================
-                    st.subheader("🔄 Ciclo di Isteresi Completo e Valori Estremi")
-                    
-                    col_grafico, col_tabella = st.columns([2.2, 1])
-                    
-                    with col_grafico:
-                        fig_ist, ax_ist = plt.subplots(figsize=(7.5, 4.8))
+                    st.subheader("🔄 Ciclo di Isteresi Sovrapposto")
+                    col_plot, col_tab = st.columns([2, 1])
+
+                    with col_plot:
+                        fig_ist, ax_ist = plt.subplots(figsize=(6.5, 5.2))
                         for i, d in enumerate(dati_elaborati):
-                            c = colors[i]
-                            ax_ist.plot(d['pos_tot'], d['cop_tot'], '-', color=c, linewidth=1.5, label=d['nome_breve'])
-                        
-                        ax_ist.axhline(0, color='k', linewidth=1, linestyle='-')
-                        ax_ist.axvline(0, color='k', linewidth=1, linestyle='-')
-                        ax_ist.set_title('Ciclo Isteresi Completo', fontweight='bold', fontsize=12)
-                        ax_ist.set_xlabel('Posizione [°]', fontsize=10)
-                        ax_ist.set_ylabel('Coppia Meccanica [Nm]', fontsize=10)
+                            ax_ist.plot(
+                                d['pos_ciclo'], d['cop_ciclo'],
+                                color=colors[i], linewidth=1.6,
+                                label=d['nome_breve']
+                            )
+                        ax_ist.axhline(0, color='k', linewidth=1.2)
+                        ax_ist.axvline(0, color='k', linewidth=1.2)
+                        ax_ist.set_title('Ciclo di Isteresi', fontweight='bold')
+                        ax_ist.set_xlabel('Posizione [°]')
+                        ax_ist.set_ylabel('Coppia [Nm]')
                         ax_ist.grid(True, linestyle=':', alpha=0.6)
                         ax_ist.legend(fontsize=8, loc='upper left')
                         plt.tight_layout()
                         st.pyplot(fig_ist)
-                    
-                    with col_tabella:
-                        st.markdown("**Valori di Coppia Estremi**")
-                        df_mini = pd.DataFrame([{
-                            'Dataset / Prova': d['nome_breve'],
-                            'Coppia Max [Nm]': f"{d['cop_max_spinta']:.2f}",
-                            'Coppia Min [Nm]': f"{d['cop_min_totale']:.2f}"
+
+                    with col_tab:
+                        st.markdown("**Coppia Max/Min**")
+                        df_minmax = pd.DataFrame([{
+                            'Dataset': d['nome_breve'],
+                            'Coppia Max [Nm]': f"{d['coppia_max']:.2f}",
+                            'Coppia Min [Nm]': f"{d['coppia_min']:.2f}"
                         } for d in dati_elaborati])
-                        
-                        st.dataframe(df_mini, use_container_width=True, hide_index=True)
+                        st.dataframe(df_minmax, use_container_width=True, hide_index=True)
 
                     st.markdown("---")
 
                     # =========================================================
-                    # 2. GRAFICI DI DETTAGLIO (Griglia 2x2)
+                    # GRAFICI (Griglia 2x2)
                     # =========================================================
-                    st.subheader("📈 Dettaglio Flex, Rebound e Rigidezza")
                     fig, axs = plt.subplots(2, 2, figsize=(13, 8.5))
 
                     for i, d in enumerate(dati_elaborati):
@@ -498,22 +514,19 @@ if uploaded_files:
                     st.pyplot(fig)
 
                     # =========================================================
-                    # 3. TABELLA RIASSUNTIVA PRESTAZIONI COMPLETA
+                    # TABELLA RIASSUNTIVA PRESTAZIONI
                     # =========================================================
-                    st.markdown("---")
-                    st.subheader("📊 Riepilogo Numerico Prestazioni Completo")
+                    st.subheader("📊 Riepilogo Numerico Prestazioni")
                     
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
-                        'Coppia Max [Nm]': f"{d['cop_max_spinta']:.2f}",
-                        'Coppia Min [Nm]': f"{d['cop_min_totale']:.2f}",
                         'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
                         'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
                         'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
                         'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
-                    st.dataframe(df_riepilogo, use_container_width=True, hide_index=True)
+                    st.dataframe(df_riepilogo, use_container_width=True)
 
 else:
     st.info("👈 Carica uno o più file Excel dal menu a sinistra per iniziare la scansione dei dati.")
