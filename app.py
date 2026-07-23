@@ -606,7 +606,7 @@ if uploaded_files:
                     
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
-                        'Energia spesa in flex [J]': f"{d['lav_andPP']:.2f}",
+                        'Energia spesa in flex di spinta [J]': f"{d['lav_andPP']:.2f}",
                         'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
                         'Energia spesa in tenuta post. [J]': f"{d['lav_ritMM']:.2f}",
                         'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
