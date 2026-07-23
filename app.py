@@ -11,7 +11,7 @@ trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
 # Configurazione pagina a larghezza intera
 st.set_page_config(
-    page_title="Confronto Rigidezza & Isteresi Scarponi",
+    page_title="ANALISI E CONFRONTO RIGIDEZZA SCARPONI",
     page_icon="🎿",
     layout="wide"
 )
