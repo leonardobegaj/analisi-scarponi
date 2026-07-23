@@ -520,7 +520,7 @@ if uploaded_files:
                     # LINEA E NUOVO TITOLO PER I RAMI SEPARATI
                     # =====================================================
                     st.markdown("---")
-                    st.subheader("📈 Confronto rigidezza con rami di curva separati")
+                    st.subheader("📈 Dettaglio Rami di Carico e Rigidezza (Flex / Rebound)")
 
                     # =====================================================
                     # GRIGLIA 2x2
