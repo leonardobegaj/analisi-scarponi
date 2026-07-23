@@ -11,22 +11,23 @@ trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
 
 # Configurazione pagina
 st.set_page_config(
-    page_title="ANALISI E CONFRONTO RIGIDEZZA SCARPONI",
+    page_title="Confronto Rigidezza & Isteresi Scarponi",
     page_icon="🎿",
     layout="wide"
 )
 
 # =========================================================================
-# CSS CUSTOM PER CENTRARE TUTTI GLI ELEMENTI A SCHERMO
+# CSS CUSTOM PER CENTRARE PERFETTAMENTE ED EVITARE CHE IL TITOLO VENGA TAGLIATO
 # =========================================================================
 st.markdown("""
     <style>
-    /* 1. Centra il contenitore principale della pagina quando la sidebar si chiude */
+    /* 1. Aumenta lo spazio in alto per NON far tagliare il titolo sotto la barra di Streamlit */
     .main .block-container {
         max-width: 1100px !important;
-        padding-top: 2rem !important;
-        padding-bottom: 2rem !important;
-        margin: 0 auto !important;
+        padding-top: 5.5rem !important;
+        padding-bottom: 3rem !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
     
     /* 2. Centra i titoli principali, sottotitoli e testi */
@@ -34,22 +35,36 @@ st.markdown("""
         text-align: center !important;
     }
     
-    /* 3. Centra i box di avviso (st.info, st.warning, st.error) */
-    div[data-testid="stAlert"] {
-        text-align: center !important;
-        justify-content: center !important;
-        margin: 0 auto !important;
+    /* 3. Centra il riquadro del Selettore Dataset (st.form) */
+    div[data-testid="stForm"] {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        max-width: 1000px !important;
     }
 
-    /* 4. Larghezza e stile Sidebar */
+    /* 4. Centra i messaggi di avviso */
+    div[data-testid="stAlert"] {
+        text-align: center !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        max-width: 1000px !important;
+    }
+
+    /* 5. Centra la visualizzazione dei grafici */
+    div[data-testid="stPlotlyChart"], div[data-testid="stpyplot"] {
+        display: flex !important;
+        justify-content: center !important;
+    }
+
+    /* 6. Larghezza e stile Sidebar */
     [data-testid="stSidebar"] {
         min-width: 350px;
         max-width: 380px;
     }
     
-    /* 5. Pulsante principale stilizzato e centrato */
+    /* 7. Pulsante principale centrato */
     div.stButton > button[kind="primary"] {
-        background-color: #1e3d59;
+        background-color: #ff4b4b;
         color: white;
         font-weight: bold;
         font-size: 18px;
@@ -440,9 +455,9 @@ if uploaded_files:
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
                         'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
-                        'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
+                        'Dissipata [J]': f"{d['e_dissipata']:.2f}",
                         'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
-                        'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
+                        'Rig. Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
                     st.dataframe(df_riepilogo, use_container_width=True)
