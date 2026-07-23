@@ -3,10 +3,10 @@ import re
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 from scipy.interpolate import PchipInterpolator
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.colors as pc
 
 # Gestione compatibilità NumPy per l'integrale
 trapz_func = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
@@ -24,16 +24,16 @@ st.set_page_config(
 # =========================================================================
 st.markdown("""
     <style>
-    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR */
+    /* 1. NASCONDE IL PULSANTE DI CHIUSURA DELLA SIDEBAR (Rende la barra permanente) */
     [data-testid="stSidebarCollapseButton"],
     [data-testid="collapsedControl"] {
         display: none !important;
     }
 
-    /* 2. Spazio in alto e larghezza contenitore principale */
+    /* 2. Spazio in alto per evitare che il titolo venga sovrapposto */
     .main .block-container {
-        max-width: 1300px !important;
-        padding-top: 3rem !important;
+        max-width: 1100px !important;
+        padding-top: 5rem !important;
         padding-bottom: 3rem !important;
         margin-left: auto !important;
         margin-right: auto !important;
@@ -48,7 +48,7 @@ st.markdown("""
     div[data-testid="stForm"] {
         margin-left: auto !important;
         margin-right: auto !important;
-        max-width: 1100px !important;
+        max-width: 1000px !important;
     }
 
     /* 5. Centra i messaggi di avviso */
@@ -56,11 +56,11 @@ st.markdown("""
         text-align: center !important;
         margin-left: auto !important;
         margin-right: auto !important;
-        max-width: 1100px !important;
+        max-width: 1000px !important;
     }
 
     /* 6. Centra i grafici */
-    div[data-testid="stPlotlyChart"] {
+    div[data-testid="stPlotlyChart"], div[data-testid="stpyplot"] {
         display: flex !important;
         justify-content: center !important;
     }
@@ -87,13 +87,17 @@ st.markdown("""
 
 st.title("🎿 ANALISI E CONFRONTO RIGIDEZZA SCARPONI")
 
-# PARAMETRI CALCOLO FISICO
+# PARAMETRI CALCOLO FISICO (uguali allo script MATLAB)
 PASSO_SECANTE_DEG = 0.25
 N_PUNTI_INTERP = 1000
 GRADO_TREND_RIGIDEZZA = 3
 
-# Palette di colori distinte per i dataset
-PALETTE_COLORI = px.colors.qualitative.Plotly + px.colors.qualitative.Set1 + px.colors.qualitative.Dark24
+# Config comune per abilitare zoom con rotellina del mouse su tutti i grafici Plotly
+PLOTLY_CONFIG = {
+    "scrollZoom": True,
+    "displaylogo": False,
+    "modeBarButtonsToAdd": ["drawline", "eraseshape"],
+}
 
 # =========================================================================
 # PARSING INTESTAZIONI E CATALOGAZIONE
@@ -348,6 +352,7 @@ if uploaded_files:
             st.write(f"Trovati **{len(etichette)}** cicli validi nei file caricati.")
             
             seleziona_tutte = st.checkbox("✅ Seleziona automaticamente tutte le curve trovate")
+            
             default_sel = etichette if seleziona_tutte else []
             
             selezionate = st.multiselect(
@@ -358,7 +363,7 @@ if uploaded_files:
             )
             
             st.markdown("---")
-            submitted = st.form_submit_button("🚀 Genera Grafici Interattivi e Confronta", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("🚀 Genera Grafici e Confronta", type="primary", use_container_width=True)
 
         if submitted:
             if not selezionate:
@@ -366,7 +371,7 @@ if uploaded_files:
             else:
                 dati_elaborati = []
                 
-                with st.spinner("Calcolo della rigidezza e generazione dei grafici interattivi..."):
+                with st.spinner("Calcolo della rigidezza e generazione dei grafici in corso..."):
                     for item in catalogo:
                         if item['label'] in selezionate:
                             df = item['df']
@@ -404,7 +409,9 @@ if uploaded_files:
                             trend_andPP = fit_trend_polinomiale(th_andPP, rig_andPP, GRADO_TREND_RIGIDEZZA)
                             trend_ritPP = fit_trend_polinomiale(th_ritPP, rig_ritPP, GRADO_TREND_RIGIDEZZA)
 
-                            # Ricostruzione ciclo di isteresi
+                            # =================================================
+                            # RICOSTRUZIONE CICLO DI ISTERESI COMPLETO (chiuso)
+                            # =================================================
                             pos_and_full = np.concatenate([pos_andMM, pos_andPP])
                             cop_and_full = np.concatenate([cop_andMM, cop_andPP])
                             pos_rit_full = np.concatenate([pos_ritPP, pos_ritMM])
@@ -434,43 +441,37 @@ if uploaded_files:
                             })
 
                 if dati_elaborati:
-                    # =========================================================
-                    # 1. CICLO DI ISTERESI SOVRAPPOSTO (Plotly) + MINI TABELLA
-                    # =========================================================
-                    st.subheader("🔄 Ciclo di Isteresi Sovrapposto (Interattivo)")
-                    st.caption("🔍 Usa il mouse per selezionare un'area di zoom. Fai doppio clic sul grafico per resettare la vista.")
-                    
-                    col_plot, col_tab = st.columns([2.2, 1])
+                    # Palette colori coerente (equivalente a tab10 di matplotlib)
+                    palette = pc.qualitative.Plotly + pc.qualitative.D3 + pc.qualitative.Set2
+                    colors = [palette[i % len(palette)] for i in range(len(dati_elaborati))]
+
+                    # =====================================================
+                    # GRAFICO CICLO DI ISTERESI SOVRAPPOSTO (Plotly, zoomabile)
+                    # =====================================================
+                    st.subheader("🔄 Ciclo di Isteresi Sovrapposto")
+                    col_plot, col_tab = st.columns([2, 1])
 
                     with col_plot:
                         fig_ist = go.Figure()
-                        
                         for i, d in enumerate(dati_elaborati):
-                            c_color = PALETTE_COLORI[i % len(PALETTE_COLORI)]
                             fig_ist.add_trace(go.Scatter(
-                                x=d['pos_ciclo'],
-                                y=d['cop_ciclo'],
+                                x=d['pos_ciclo'], y=d['cop_ciclo'],
                                 mode='lines',
-                                name=d['nome_breve'],
-                                line=dict(color=c_color, width=2),
-                                hovertemplate="<b>%{text}</b><br>Posizione: %{x:.2f}°<br>Coppia: %{y:.2f} Nm<extra></extra>",
-                                text=[d['nome_breve']] * len(d['pos_ciclo'])
+                                line=dict(color=colors[i], width=2),
+                                name=d['nome_breve']
                             ))
-
-                        fig_ist.add_hline(y=0, line_width=1.2, line_dash="solid", line_color="black")
-                        fig_ist.add_vline(x=0, line_width=1.2, line_dash="solid", line_color="black")
-
+                        fig_ist.add_hline(y=0, line_color="black", line_width=1.2)
+                        fig_ist.add_vline(x=0, line_color="black", line_width=1.2)
                         fig_ist.update_layout(
-                            title=dict(text="Ciclo di Isteresi Completo", font=dict(size=16, color="black")),
+                            title="Ciclo di Isteresi",
                             xaxis_title="Posizione [°]",
                             yaxis_title="Coppia [Nm]",
-                            hovermode="closest",
                             template="plotly_white",
-                            height=480,
-                            margin=dict(l=20, r=20, t=40, b=20),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            height=520,
+                            legend=dict(font=dict(size=9)),
+                            margin=dict(t=50, b=40, l=50, r=20),
                         )
-                        st.plotly_chart(fig_ist, use_container_width=True)
+                        st.plotly_chart(fig_ist, use_container_width=True, config=PLOTLY_CONFIG)
 
                     with col_tab:
                         st.markdown("**Coppia Max/Min**")
@@ -483,166 +484,110 @@ if uploaded_files:
 
                     st.markdown("---")
 
-                    # =========================================================
-                    # 2. GRAFICI DI DETTAGLIO (Plotly Subplots 2x2 Interattivi)
-                    # =========================================================
-                    st.subheader("📈 Dettaglio Flex, Rebound e Rigidezza (Interattivi)")
-                    st.caption("💡 Fai clic sulle voci della legenda in alto a destra per attivare/disattivare specifiche curve su tutti e 4 i grafici contemporaneamente.")
+                    # =====================================================
+                    # GRIGLIA 2x2 (Plotly, zoomabile)
+                    # =====================================================
+                    titles = ['Andata++ (Flex di Spinta)', 'Ritorno++ (Rebound)',
+                              'Rigidezza Andata++ (Flex)', 'Rigidezza Ritorno++ (Rebound)']
 
-                    # CALCOLO SCALE Y UNIFICATE
-                    all_cop, all_rig = [], []
-                    for d in dati_elaborati:
-                        all_cop.extend(d['cop_andPP'])
-                        all_cop.extend(d['cop_ritPP'])
-                        all_rig.extend(d['rig_andPP'])
-                        all_rig.extend(d['trend_andPP'])
-                        all_rig.extend(d['rig_ritPP'])
-                        all_rig.extend(d['trend_ritPP'])
-
-                    if all_cop:
-                        c_min, c_max = float(np.min(all_cop)), float(np.max(all_cop))
-                        c_margin = (c_max - c_min) * 0.05 if c_max != c_min else 1.0
-                        y_range_cop = [min(0.0, c_min - c_margin), c_max + c_margin]
-                    else:
-                        y_range_cop = None
-
-                    if all_rig:
-                        r_min, r_max = float(np.min(all_rig)), float(np.max(all_rig))
-                        r_margin = (r_max - r_min) * 0.05 if r_max != r_min else 1.0
-                        y_range_rig = [min(0.0, r_min - r_margin), r_max + r_margin]
-                    else:
-                        y_range_rig = None
-
-                    fig_2x2 = make_subplots(
+                    fig = make_subplots(
                         rows=2, cols=2,
-                        subplot_titles=(
-                            "Andata++ (Flex di Spinta)", "Ritorno++ (Rebound)",
-                            "Rigidezza Andata++ (Flex)", "Rigidezza Ritorno++ (Rebound)"
-                        ),
-                        horizontal_spacing=0.08,
-                        vertical_spacing=0.22  # Spaziatura verticale aumentata
+                        subplot_titles=titles,
+                        vertical_spacing=0.12,
+                        horizontal_spacing=0.08
                     )
 
                     for i, d in enumerate(dati_elaborati):
-                        c_color = PALETTE_COLORI[i % len(PALETTE_COLORI)]
-                        lbl_breve = d['nome_breve']
+                        c = colors[i]
+                        show_legend = True  # una voce di legenda per dataset (raggruppata)
 
-                        # Subplot 1: Andata++ (Coppia vs Posizione)
-                        fig_2x2.add_trace(go.Scatter(
+                        # Coppia vs Posizione - Andata++
+                        fig.add_trace(go.Scatter(
                             x=d['pos_andPP'], y=d['cop_andPP'],
-                            mode='lines',
-                            name=f"{lbl_breve} ({d['lav_andPP']:.2f} J)",
-                            legendgroup=lbl_breve,
-                            showlegend=True,
-                            line=dict(color=c_color, width=2),
-                            hovertemplate=f"<b>{lbl_breve}</b><br>Posizione: %{{x:.2f}}°<br>Coppia: %{{y:.2f}} Nm<extra></extra>"
+                            mode='lines', line=dict(color=c, width=1.8),
+                            name=f"{d['nome_breve']} ({d['lav_andPP']:.2f} J)",
+                            legendgroup=d['nome_breve'], showlegend=show_legend
                         ), row=1, col=1)
 
-                        # Subplot 2: Ritorno++ (Coppia vs Posizione)
-                        fig_2x2.add_trace(go.Scatter(
+                        # Coppia vs Posizione - Ritorno++
+                        fig.add_trace(go.Scatter(
                             x=d['pos_ritPP'], y=d['cop_ritPP'],
-                            mode='lines',
-                            name=f"{lbl_breve} ({d['lav_ritPP']:.2f} J)",
-                            legendgroup=lbl_breve,
-                            showlegend=False,
-                            line=dict(color=c_color, width=2),
-                            hovertemplate=f"<b>{lbl_breve}</b><br>Posizione: %{{x:.2f}}°<br>Coppia: %{{y:.2f}} Nm<extra></extra>"
+                            mode='lines', line=dict(color=c, width=1.8),
+                            name=f"{d['nome_breve']} ({d['lav_ritPP']:.2f} J)",
+                            legendgroup=d['nome_breve'], showlegend=False
                         ), row=1, col=2)
 
-                        # Subplot 3: Rigidezza Andata++ (Secante + Trend Polinomiale)
-                        fig_2x2.add_trace(go.Scatter(
+                        # Rigidezza Andata++ (grezza tratteggiata + trend)
+                        fig.add_trace(go.Scatter(
                             x=d['th_andPP'], y=d['rig_andPP'],
-                            mode='lines',
-                            name=f"{lbl_breve} (Grezza)",
-                            legendgroup=lbl_breve,
-                            showlegend=False,
-                            line=dict(color=c_color, width=1, dash='dot'),
-                            opacity=0.35,
-                            hoverinfo='skip'
+                            mode='lines', line=dict(color=c, width=1, dash='dash'),
+                            opacity=0.4, name=d['nome_breve'],
+                            legendgroup=d['nome_breve'], showlegend=False
                         ), row=2, col=1)
-                        
-                        fig_2x2.add_trace(go.Scatter(
+                        fig.add_trace(go.Scatter(
                             x=d['th_andPP'], y=d['trend_andPP'],
-                            mode='lines',
-                            name=lbl_breve,
-                            legendgroup=lbl_breve,
-                            showlegend=False,
-                            line=dict(color=c_color, width=2.5),
-                            hovertemplate=f"<b>{lbl_breve} (Trend)</b><br>Posizione: %{{x:.2f}}°<br>Rigidezza: %{{y:.2f}} Nm/°<extra></extra>"
+                            mode='lines', line=dict(color=c, width=2.5),
+                            name=d['nome_breve'],
+                            legendgroup=d['nome_breve'], showlegend=False
                         ), row=2, col=1)
 
-                        # Subplot 4: Rigidezza Ritorno++ (Secante + Trend Polinomiale)
-                        fig_2x2.add_trace(go.Scatter(
+                        # Rigidezza Ritorno++ (grezza tratteggiata + trend)
+                        fig.add_trace(go.Scatter(
                             x=d['th_ritPP'], y=d['rig_ritPP'],
-                            mode='lines',
-                            name=f"{lbl_breve} (Grezza)",
-                            legendgroup=lbl_breve,
-                            showlegend=False,
-                            line=dict(color=c_color, width=1, dash='dot'),
-                            opacity=0.35,
-                            hoverinfo='skip'
+                            mode='lines', line=dict(color=c, width=1, dash='dash'),
+                            opacity=0.4, name=d['nome_breve'],
+                            legendgroup=d['nome_breve'], showlegend=False
                         ), row=2, col=2)
-                        
-                        fig_2x2.add_trace(go.Scatter(
+                        fig.add_trace(go.Scatter(
                             x=d['th_ritPP'], y=d['trend_ritPP'],
-                            mode='lines',
-                            name=lbl_breve,
-                            legendgroup=lbl_breve,
-                            showlegend=False,
-                            line=dict(color=c_color, width=2.5),
-                            hovertemplate=f"<b>{lbl_breve} (Trend)</b><br>Posizione: %{{x:.2f}}°<br>Rigidezza: %{{y:.2f}} Nm/°<extra></extra>"
+                            mode='lines', line=dict(color=c, width=2.5),
+                            name=d['nome_breve'],
+                            legendgroup=d['nome_breve'], showlegend=False
                         ), row=2, col=2)
 
-                    # Etichette degli assi
-                    fig_2x2.update_xaxes(title_text="Posizione [°]", row=1, col=1)
-                    fig_2x2.update_xaxes(title_text="Posizione [°]", row=1, col=2)
-                    fig_2x2.update_xaxes(title_text="Posizione [°]", row=2, col=1)
-                    fig_2x2.update_xaxes(title_text="Posizione [°]", row=2, col=2)
+                    fig.update_xaxes(title_text="Posizione [°]", row=1, col=1)
+                    fig.update_xaxes(title_text="Posizione [°]", row=1, col=2)
+                    fig.update_xaxes(title_text="Posizione [°]", row=2, col=1)
+                    fig.update_xaxes(title_text="Posizione [°]", row=2, col=2)
+                    fig.update_yaxes(title_text="Coppia [Nm]", row=1, col=1)
+                    fig.update_yaxes(title_text="Coppia [Nm]", row=1, col=2)
+                    fig.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=1)
+                    fig.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=2)
 
-                    fig_2x2.update_yaxes(title_text="Coppia [Nm]", row=1, col=1)
-                    fig_2x2.update_yaxes(title_text="Coppia [Nm]", row=1, col=2, matches='y')
-                    fig_2x2.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=1)
-                    fig_2x2.update_yaxes(title_text="Rigidezza [Nm/°]", row=2, col=2, matches='y3')
+                    # Unificazione assi Y (Coppia in alto, Rigidezza in basso), come nell'originale
+                    y_cop_all = np.concatenate([d['cop_andPP'] for d in dati_elaborati] + [d['cop_ritPP'] for d in dati_elaborati])
+                    y_rig_all = np.concatenate([d['rig_andPP'] for d in dati_elaborati] + [d['rig_ritPP'] for d in dati_elaborati])
+                    if len(y_cop_all) > 0:
+                        pad_cop = 0.05 * (y_cop_all.max() - y_cop_all.min() + 1e-9)
+                        fig.update_yaxes(range=[y_cop_all.min() - pad_cop, y_cop_all.max() + pad_cop], row=1, col=1)
+                        fig.update_yaxes(range=[y_cop_all.min() - pad_cop, y_cop_all.max() + pad_cop], row=1, col=2)
+                    if len(y_rig_all) > 0:
+                        pad_rig = 0.05 * (y_rig_all.max() - y_rig_all.min() + 1e-9)
+                        fig.update_yaxes(range=[y_rig_all.min() - pad_rig, y_rig_all.max() + pad_rig], row=2, col=1)
+                        fig.update_yaxes(range=[y_rig_all.min() - pad_rig, y_rig_all.max() + pad_rig], row=2, col=2)
 
-                    # Forzatura del range Y unificato su riga 1 e riga 2
-                    if y_range_cop:
-                        fig_2x2.update_yaxes(range=y_range_cop, row=1, col=1)
-                    if y_range_rig:
-                        fig_2x2.update_yaxes(range=y_range_rig, row=2, col=1)
-
-                    # Layout generale
-                    fig_2x2.update_layout(
+                    fig.update_layout(
                         template="plotly_white",
-                        height=800,
-                        margin=dict(l=20, r=20, t=50, b=20),
-                        legend=dict(
-                            orientation="h",
-                            yanchor="bottom",
-                            y=1.06,
-                            xanchor="center",
-                            x=0.5
-                        )
+                        height=780,
+                        legend=dict(font=dict(size=9)),
+                        margin=dict(t=60, b=40, l=50, r=20),
                     )
+                    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
-                    st.plotly_chart(fig_2x2, use_container_width=True)
-
-                    # =========================================================
-                    # 3. TABELLA RIASSUNTIVA PRESTAZIONI COMPLETA
-                    # =========================================================
-                    st.markdown("---")
-                    st.subheader("📊 Riepilogo Numerico Prestazioni Completo")
+                    # =====================================================
+                    # TABELLA RIASSUNTIVA PRESTAZIONI
+                    # =====================================================
+                    st.subheader("📊 Riepilogo Numerico Prestazioni")
                     
                     df_riepilogo = pd.DataFrame([{
                         'Dataset / Prova': d['nome_breve'],
-                        'Coppia Max [Nm]': f"{d['coppia_max']:.2f}",
-                        'Coppia Min [Nm]': f"{d['coppia_min']:.2f}",
                         'Energia spesa [J]': f"{d['lav_andPP']:.2f}",
                         'Energia Dissipata [J]': f"{d['e_dissipata']:.2f}",
                         'Tenuta Post. [J]': f"{d['lav_ritMM']:.2f}",
                         'Tenuta Max Post. [Nm/°]': f"{d['rig_max_ritMM']:.2f}"
                     } for d in dati_elaborati])
                     
-                    st.dataframe(df_riepilogo, use_container_width=True, hide_index=True)
+                    st.dataframe(df_riepilogo, use_container_width=True)
 
 else:
     st.info("👈 Carica uno o più file Excel dal menu a sinistra per iniziare la scansione dei dati.")
